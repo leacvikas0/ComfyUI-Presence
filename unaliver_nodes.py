@@ -162,11 +162,14 @@ class FluxAdaptiveInjector:
                 print(f"   📐 After resize: {pixels.shape}")
             
             # 2. MOVE TO GPU & ENCODE
-            pixels = pixels.to(vae_device)
+            pixels = pixels.to(vae_device).contiguous()  # Ensure contiguous after GPU move
             
             try:
+                # Scale to [-1, 1] and ensure contiguous
+                pixels_scaled = (pixels * 2.0 - 1.0).contiguous()
+                
                 # Encode - ComfyUI VAE expects input in dict format {"samples": tensor}
-                latent = vae.encode(pixels * 2.0 - 1.0)  # Scale from [0,1] to [-1,1]
+                latent = vae.encode(pixels_scaled)
                 
                 # Handle "Distribution" vs "Tensor" ambiguity
                 if hasattr(latent, "sample"):
@@ -183,6 +186,8 @@ class FluxAdaptiveInjector:
             except Exception as e:
                 print(f"❌ VAE Error on Image {i+1}: {e}")
                 print(f"   Tensor shape at error: {pixels.shape}")
+                print(f"   Tensor is contiguous: {pixels.is_contiguous()}")
+                print(f"   Tensor stride: {pixels.stride()}")
 
         # 4. INJECT INTO CONDITIONING
         # This is the exact logic from the 'ReferenceLatent' node
