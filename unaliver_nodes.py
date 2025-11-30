@@ -168,6 +168,13 @@ class FluxAdaptiveInjector:
                 # Scale to [-1, 1] and ensure contiguous
                 pixels_scaled = (pixels * 2.0 - 1.0).contiguous()
                 
+                # CRITICAL: Force NCHW format (PyTorch VAE requirement)
+                if pixels_scaled.shape[-1] == 3:
+                    print(f"   ⚠️ WARNING: Tensor was in NHWC format, converting to NCHW")
+                    pixels_scaled = pixels_scaled.permute(0, 3, 1, 2).contiguous()
+                
+                print(f"   📐 Final shape before VAE: {pixels_scaled.shape}")
+                
                 # Encode - ComfyUI VAE expects input in dict format {"samples": tensor}
                 latent = vae.encode(pixels_scaled)
                 
