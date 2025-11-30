@@ -109,7 +109,7 @@ class FluxAdaptiveInjector:
     CATEGORY = "Unaliver"
 
     def inject_references(self, conditioning, vae, image_bundle, megapixels=1.0):
-        print(f"💉 FLUX INJECTOR v2.1: Encoding {len(image_bundle)} references at ~{megapixels} MP...")
+        print(f"💉 FLUX INJECTOR v2.2: Encoding {len(image_bundle)} references at ~{megapixels} MP...")
         
         reference_latents = []
         
@@ -161,13 +161,11 @@ class FluxAdaptiveInjector:
                 pixels = torch.nn.functional.interpolate(pixels, size=(new_H, new_W), mode="bilinear", align_corners=False)
                 print(f"   📐 After resize: {pixels.shape}")
             
-            # 2. MOVE TO GPU & PREPARE
+            # 2. MOVE TO GPU & ENCODE
             pixels = pixels.to(vae_device).contiguous()
             
             try:
-                # CRITICAL FIX: For Flux, we DON'T VAE encode the reference images
-                # We pass them directly as conditioning hints (like ControlNet does)
-                # Scale to [-1, 1] as expected by Flux
+                # Scale to [-1, 1] and ensure contiguous
                 pixels_scaled = (pixels * 2.0 - 1.0).contiguous()
                 
                 # CRITICAL: Force NCHW format (PyTorch requirement)
@@ -175,15 +173,28 @@ class FluxAdaptiveInjector:
                     print(f"   ⚠️ WARNING: Tensor was in NHWC format, converting to NCHW")
                     pixels_scaled = pixels_scaled.permute(0, 3, 1, 2).contiguous()
                 
-                print(f"   📐 Final reference shape: {pixels_scaled.shape}")
+                print(f"   📐 Final shape before VAE: {pixels_scaled.shape}")
                 
-                # Pass as-is (no VAE encoding for reference images)
-                reference_latents.append(pixels_scaled)
-                print(f"   ✅ Prepared Image {i+1} as reference")
+                # Try ComfyUI's VAE encode method (returns dict with "samples" key)
+                latent = vae.encode(pixels_scaled[:,:,:,:pixels_scaled.shape[3]])
+                
+                # Handle return types
+                if hasattr(latent, "sample"):
+                    latent = latent.sample()
+                elif isinstance(latent, dict) and "samples" in latent:
+                    latent = latent["samples"]
+                
+                # 3. ADD TO LIST
+                reference_latents.append(latent)
+                print(f"   ✅ Encoded Image {i+1} successfully")
                 
             except Exception as e:
-                print(f"❌ Error on Image {i+1}: {e}")
-                print(f"   Tensor shape at error: {pixels.shape}")
+                print(f"❌ VAE Error on Image {i+1}: {e}")
+                print(f"   Tensor shape: {pixels_scaled.shape}")
+                print(f"   Tensor dtype: {pixels_scaled.dtype}")
+                print(f"   Tensor device: {pixels_scaled.device}")
+                import traceback
+                traceback.print_exc()
 
         # 4. INJECT INTO CONDITIONING
         # This is the exact logic from the 'ReferenceLatent' node
