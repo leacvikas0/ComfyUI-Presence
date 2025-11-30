@@ -109,7 +109,7 @@ class FluxAdaptiveInjector:
     CATEGORY = "Unaliver"
 
     def inject_references(self, conditioning, vae, image_bundle, megapixels=1.0):
-        print(f"💉 FLUX INJECTOR: Encoding {len(image_bundle)} references at ~{megapixels} MP...")
+        print(f"💉 FLUX INJECTOR v2.1: Encoding {len(image_bundle)} references at ~{megapixels} MP...")
         
         reference_latents = []
         
@@ -161,40 +161,29 @@ class FluxAdaptiveInjector:
                 pixels = torch.nn.functional.interpolate(pixels, size=(new_H, new_W), mode="bilinear", align_corners=False)
                 print(f"   📐 After resize: {pixels.shape}")
             
-            # 2. MOVE TO GPU & ENCODE
-            pixels = pixels.to(vae_device).contiguous()  # Ensure contiguous after GPU move
+            # 2. MOVE TO GPU & PREPARE
+            pixels = pixels.to(vae_device).contiguous()
             
             try:
-                # Scale to [-1, 1] and ensure contiguous
+                # CRITICAL FIX: For Flux, we DON'T VAE encode the reference images
+                # We pass them directly as conditioning hints (like ControlNet does)
+                # Scale to [-1, 1] as expected by Flux
                 pixels_scaled = (pixels * 2.0 - 1.0).contiguous()
                 
-                # CRITICAL: Force NCHW format (PyTorch VAE requirement)
+                # CRITICAL: Force NCHW format (PyTorch requirement)
                 if pixels_scaled.shape[-1] == 3:
                     print(f"   ⚠️ WARNING: Tensor was in NHWC format, converting to NCHW")
                     pixels_scaled = pixels_scaled.permute(0, 3, 1, 2).contiguous()
                 
-                print(f"   📐 Final shape before VAE: {pixels_scaled.shape}")
+                print(f"   📐 Final reference shape: {pixels_scaled.shape}")
                 
-                # Encode - ComfyUI VAE expects input in dict format {"samples": tensor}
-                latent = vae.encode(pixels_scaled)
-                
-                # Handle "Distribution" vs "Tensor" ambiguity
-                if hasattr(latent, "sample"):
-                    latent = latent.sample()
-                elif isinstance(latent, dict) and "samples" in latent:
-                    latent = latent["samples"]
-                else:
-                    latent = latent
-                
-                # 3. ADD TO LIST
-                reference_latents.append(latent)
-                print(f"   ✅ Encoded Image {i+1} successfully")
+                # Pass as-is (no VAE encoding for reference images)
+                reference_latents.append(pixels_scaled)
+                print(f"   ✅ Prepared Image {i+1} as reference")
                 
             except Exception as e:
-                print(f"❌ VAE Error on Image {i+1}: {e}")
+                print(f"❌ Error on Image {i+1}: {e}")
                 print(f"   Tensor shape at error: {pixels.shape}")
-                print(f"   Tensor is contiguous: {pixels.is_contiguous()}")
-                print(f"   Tensor stride: {pixels.stride()}")
 
         # 4. INJECT INTO CONDITIONING
         # This is the exact logic from the 'ReferenceLatent' node
