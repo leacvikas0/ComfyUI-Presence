@@ -145,7 +145,7 @@ class FluxAdaptiveInjector:
             print(f"   🔄 Resizing: {H}x{W} -> {new_H}x{new_W} (scale: {scale_factor:.2f}x)")
             
             # Permute for torch resize: [B, C, H, W]
-            pixels = image_tensor.permute(0, 3, 1, 2)
+            pixels = image_tensor.permute(0, 3, 1, 2).contiguous()  # CRITICAL: Make contiguous!
             print(f"   📐 After permute: {pixels.shape}")
             
             # Bilinear resize is best for photos
@@ -157,16 +157,16 @@ class FluxAdaptiveInjector:
             pixels = pixels.to(vae_device)
             
             try:
-                # Encode
-                latent_dist = vae.encode(pixels)
+                # Encode - ComfyUI VAE expects input in dict format {"samples": tensor}
+                latent = vae.encode(pixels * 2.0 - 1.0)  # Scale from [0,1] to [-1,1]
                 
                 # Handle "Distribution" vs "Tensor" ambiguity
-                if hasattr(latent_dist, "sample"):
-                    latent = latent_dist.sample()
-                elif isinstance(latent_dist, dict) and "samples" in latent_dist:
-                    latent = latent_dist["samples"]
+                if hasattr(latent, "sample"):
+                    latent = latent.sample()
+                elif isinstance(latent, dict) and "samples" in latent:
+                    latent = latent["samples"]
                 else:
-                    latent = latent_dist
+                    latent = latent
                 
                 # 3. ADD TO LIST
                 reference_latents.append(latent)
