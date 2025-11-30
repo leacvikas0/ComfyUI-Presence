@@ -109,7 +109,7 @@ class FluxAdaptiveInjector:
     CATEGORY = "Unaliver"
 
     def inject_references(self, conditioning, vae, image_bundle, megapixels=1.0):
-        print(f"💉 FLUX INJECTOR v2.2: Encoding {len(image_bundle)} references at ~{megapixels} MP...")
+        print(f"💉 FLUX INJECTOR v2.3: Encoding {len(image_bundle)} references at ~{megapixels} MP...")
         
         reference_latents = []
         
@@ -161,22 +161,27 @@ class FluxAdaptiveInjector:
                 pixels = torch.nn.functional.interpolate(pixels, size=(new_H, new_W), mode="bilinear", align_corners=False)
                 print(f"   📐 After resize: {pixels.shape}")
             
-            # 2. MOVE TO GPU & ENCODE
-            pixels = pixels.to(vae_device).contiguous()
+            # 2. PREPARE TENSOR
+            # First do all CPU operations
+            # Permute already done above
+            
+            # Scale to [-1, 1] 
+            pixels_scaled = (pixels * 2.0 - 1.0).contiguous()
+            
+            # CRITICAL: Force NCHW format (PyTorch requirement)
+            if pixels_scaled.shape[-1] == 3:
+                print(f"   ⚠️ WARNING: Tensor was in NHWC format, converting to NCHW")
+                pixels_scaled = pixels_scaled.permute(0, 3, 1, 2).contiguous()
+            
+            print(f"   📐 Final shape before VAE: {pixels_scaled.shape}")
             
             try:
-                # Scale to [-1, 1] and ensure contiguous
-                pixels_scaled = (pixels * 2.0 - 1.0).contiguous()
+                # CRITICAL: Move to GPU right before VAE call and ensure contiguous
+                pixels_encoded = pixels_scaled.to(vae_device).contiguous()
+                print(f"   🖥️ Moved to device: {pixels_encoded.device}")
                 
-                # CRITICAL: Force NCHW format (PyTorch requirement)
-                if pixels_scaled.shape[-1] == 3:
-                    print(f"   ⚠️ WARNING: Tensor was in NHWC format, converting to NCHW")
-                    pixels_scaled = pixels_scaled.permute(0, 3, 1, 2).contiguous()
-                
-                print(f"   📐 Final shape before VAE: {pixels_scaled.shape}")
-                
-                # Try ComfyUI's VAE encode method (returns dict with "samples" key)
-                latent = vae.encode(pixels_scaled[:,:,:,:pixels_scaled.shape[3]])
+                # Encode (no slicing, just the raw tensor)
+                latent = vae.encode(pixels_encoded)
                 
                 # Handle return types
                 if hasattr(latent, "sample"):
@@ -193,6 +198,7 @@ class FluxAdaptiveInjector:
                 print(f"   Tensor shape: {pixels_scaled.shape}")
                 print(f"   Tensor dtype: {pixels_scaled.dtype}")
                 print(f"   Tensor device: {pixels_scaled.device}")
+                print(f"   Tensor is_contiguous: {pixels_scaled.is_contiguous()}")
                 import traceback
                 traceback.print_exc()
 
