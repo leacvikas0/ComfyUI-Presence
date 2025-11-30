@@ -139,8 +139,16 @@ class FluxAdaptiveInjector:
             
             # Rescale if needed (up or down) to hit the target pixel count
             scale_factor = (target_pixels / current_pixels) ** 0.5
-            new_H = max(64, int(H * scale_factor))  # Minimum 64px
-            new_W = max(64, int(W * scale_factor))  # Minimum 64px
+            new_H = int(H * scale_factor)
+            new_W = int(W * scale_factor)
+            
+            # Round to nearest multiple of 64 (VAE requirement)
+            new_H = ((new_H + 32) // 64) * 64
+            new_W = ((new_W + 32) // 64) * 64
+            
+            # Ensure minimum size
+            new_H = max(64, new_H)
+            new_W = max(64, new_W)
             
             print(f"   🔄 Resizing: {H}x{W} -> {new_H}x{new_W} (scale: {scale_factor:.2f}x)")
             
