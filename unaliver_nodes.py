@@ -82,10 +82,7 @@ class UnaliverPlanner:
 
 
 # --------------------------------------------------------------------------------
-# NODE 2: THE INJECTOR (The Engine)
-# 1. Enforces 1MP Limit (Safety).
-# 2. Encodes to VAE Latents.
-# 3. Injects into Conditioning exactly like 'ReferenceLatent'.
+# NODE 2: THE INJECTOR (SIMPLIFIED - No VAE encoding, takes pre-encoded latents)
 # --------------------------------------------------------------------------------
 
 class FluxAdaptiveInjector:
@@ -94,12 +91,7 @@ class FluxAdaptiveInjector:
         return {
             "required": {
                 "conditioning": ("CONDITIONING",), 
-                "vae": ("VAE",),
-                "image_bundle": ("UNALIVER_BUNDLE",),
-            },
-            "optional": {
-                # Default 1.0 MP = 1024x1024 roughly. This is Flux's native resolution.
-                "megapixels": ("FLOAT", {"default": 1.0, "min": 0.5, "max": 2.0, "step": 0.1}),
+                "latents": ("LATENT",),  # Changed from VAE+images to pre-encoded latents
             }
         }
 
@@ -108,100 +100,15 @@ class FluxAdaptiveInjector:
     FUNCTION = "inject_references"
     CATEGORY = "Unaliver"
 
-    def inject_references(self, conditioning, vae, image_bundle, megapixels=1.0):
-        print(f"💉 FLUX INJECTOR v2.3: Encoding {len(image_bundle)} references at ~{megapixels} MP...")
+    def inject_references(self, conditioning, latents):
+        print(f"💉 FLUX INJECTOR v3.0: Injecting pre-encoded latents...")
         
-        reference_latents = []
-        
-        # Helper to find VAE device (CPU vs CUDA)
-        try:
-            vae_device = vae.first_stage_model.device
-        except:
-            vae_device = torch.device("cpu")
-
-        for i, image_tensor in enumerate(image_bundle):
-            # DEBUG: Print input shape
-            print(f"   📐 Input Image {i+1} shape: {image_tensor.shape}")
+        # Extract the latent samples
+        if isinstance(latents, dict) and "samples" in latents:
+            reference_latent = latents["samples"]
+        else:
+            reference_latent = latents
             
-            # 1. VALIDATE AND RESIZE TO target MEGAPIXELS (Keep Aspect Ratio)
-            B, H, W, C = image_tensor.shape
-            
-            # Safety check
-            if C != 3:
-                print(f"   ⚠️ WARNING: Image {i+1} has {C} channels (expected 3). Skipping.")
-                continue
-            if H == 0 or W == 0:
-                print(f"   ⚠️ WARNING: Image {i+1} has invalid dimensions {H}x{W}. Skipping.")
-                continue
-            
-            current_pixels = H * W
-            target_pixels = megapixels * 1024 * 1024
-            
-            # Rescale if needed (up or down) to hit the target pixel count
-            scale_factor = (target_pixels / current_pixels) ** 0.5
-            new_H = int(H * scale_factor)
-            new_W = int(W * scale_factor)
-            
-            # Round to nearest multiple of 64 (VAE requirement)
-            new_H = ((new_H + 32) // 64) * 64
-            new_W = ((new_W + 32) // 64) * 64
-            
-            # Ensure minimum size
-            new_H = max(64, new_H)
-            new_W = max(64, new_W)
-            
-            print(f"   🔄 Resizing: {H}x{W} -> {new_H}x{new_W} (scale: {scale_factor:.2f}x)")
-            
-            # Permute for torch resize: [B, C, H, W]
-            pixels = image_tensor.permute(0, 3, 1, 2).contiguous()  # CRITICAL: Make contiguous!
-            print(f"   📐 After permute: {pixels.shape}")
-            
-            # Bilinear resize is best for photos
-            if new_H != H or new_W != W:
-                pixels = torch.nn.functional.interpolate(pixels, size=(new_H, new_W), mode="bilinear", align_corners=False)
-                print(f"   📐 After resize: {pixels.shape}")
-            
-            # 2. PREPARE TENSOR
-            # First do all CPU operations
-            # Permute already done above
-            
-            # Scale to [-1, 1] 
-            pixels_scaled = (pixels * 2.0 - 1.0).contiguous()
-            
-            # CRITICAL: Force NCHW format (PyTorch requirement)
-            if pixels_scaled.shape[-1] == 3:
-                print(f"   ⚠️ WARNING: Tensor was in NHWC format, converting to NCHW")
-                pixels_scaled = pixels_scaled.permute(0, 3, 1, 2).contiguous()
-            
-            print(f"   📐 Final shape before VAE: {pixels_scaled.shape}")
-            
-            try:
-                # CRITICAL: Move to GPU right before VAE call and ensure contiguous
-                pixels_encoded = pixels_scaled.to(vae_device).contiguous()
-                print(f"   🖥️ Moved to device: {pixels_encoded.device}")
-                
-                # Encode (no slicing, just the raw tensor)
-                latent = vae.encode(pixels_encoded)
-                
-                # Handle return types
-                if hasattr(latent, "sample"):
-                    latent = latent.sample()
-                elif isinstance(latent, dict) and "samples" in latent:
-                    latent = latent["samples"]
-                
-                # 3. ADD TO LIST
-                reference_latents.append(latent)
-                print(f"   ✅ Encoded Image {i+1} successfully")
-                
-            except Exception as e:
-                print(f"❌ VAE Error on Image {i+1}: {e}")
-                print(f"   Tensor shape: {pixels_scaled.shape}")
-                print(f"   Tensor dtype: {pixels_scaled.dtype}")
-                print(f"   Tensor device: {pixels_scaled.device}")
-                print(f"   Tensor is_contiguous: {pixels_scaled.is_contiguous()}")
-                import traceback
-                traceback.print_exc()
-
         # 4. INJECT INTO CONDITIONING
         # This is the exact logic from the 'ReferenceLatent' node
         c_out = []
@@ -212,15 +119,15 @@ class FluxAdaptiveInjector:
             
             if key in d:
                 # Append to existing references
-                d[key] = d[key] + reference_latents
+                d[key] = d[key] + [reference_latent]
             else:
                 # Create new list
-                d[key] = reference_latents
+                d[key] = [reference_latent]
             
             n = [t[0], d]
             c_out.append(n)
 
-        print(f"✅ Injection Complete. {len(reference_latents)} references active.")
+        print(f"✅ Injection Complete.")
         return (c_out,)
 
 NODE_CLASS_MAPPINGS = {
