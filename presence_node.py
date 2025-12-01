@@ -109,6 +109,18 @@ class PresenceDirector:
             path = os.path.join(active_folder, f)
             try:
                 img = Image.open(path)
+                img = ImageOps.exif_transpose(img)
+                
+                # Resize to ~1 megapixel for Gemini (saves API costs)
+                current_pixels = img.width * img.height
+                target_pixels = 1024 * 1024  # 1MP
+                if current_pixels > target_pixels:
+                    scale_factor = (target_pixels / current_pixels) ** 0.5
+                    new_width = int(img.width * scale_factor)
+                    new_height = int(img.height * scale_factor)
+                    img = img.resize((new_width, new_height), Image.LANCZOS)
+                    print(f"   📐 Resized {f}: {img.width}x{img.height} (~1MP)")
+                
                 upload_images.append(img)
             except Exception as e:
                 print(f"   ❌ Error reading {f}: {e}")
