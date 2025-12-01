@@ -164,20 +164,26 @@ class FluxAdaptiveInjector:
                 traceback.print_exc()
 
         # Inject LIST of latents into conditioning (Flux 2 expects list)
-        c_out = []
-        for t in conditioning:
-            d = t[1].copy()
+        # CRITICAL FIX: Only inject if we actually have references. 
+        # Injecting an empty list [] causes Flux attention layers to crash with "tensor of 0 elements"
+        if len(reference_latents) > 0:
+            c_out = []
+            for t in conditioning:
+                d = t[1].copy()
+                
+                if "reference_latents" in d:
+                    d["reference_latents"] = d["reference_latents"] + reference_latents
+                else:
+                    d["reference_latents"] = reference_latents
+                
+                n = [t[0], d]
+                c_out.append(n)
             
-            if "reference_latents" in d:
-                d["reference_latents"] = d["reference_latents"] + reference_latents
-            else:
-                d["reference_latents"] = reference_latents
-            
-            n = [t[0], d]
-            c_out.append(n)
-
-        print(f"✅ Injection Complete. {len(reference_latents)} references active.")
-        return (c_out,)
+            print(f"✅ Injection Complete. {len(reference_latents)} references active.")
+            return (c_out,)
+        else:
+            print("⚠️ No references to inject. Passing conditioning through unchanged.")
+            return (conditioning,)
 
 NODE_CLASS_MAPPINGS = {
     "UnaliverPlanner": UnaliverPlanner,

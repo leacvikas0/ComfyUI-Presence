@@ -31,7 +31,7 @@ class PresenceDirector:
         return {
             "required": {
                 "active_folder": ("STRING", {"default": "C:/Presence/Job_01"}),
-                "api_key": ("STRING", {"default": "AIzaSyD8XxVo1mC5DJM3f-v62FnQtxZn1vcSl3I"}),
+                "api_key": ("STRING", {"default": "ENTER_GEMINI_API_KEY_HERE"}),
                 "model_name": (
                     [
                         "gemini-2.5-flash-preview-09-2025",
@@ -114,9 +114,9 @@ class PresenceDirector:
                 print(f"   ❌ Error reading {f}: {e}")
 
         # --- SAFETY CHECK: EMPTY FOLDER ---
-        if len(current_files) == 0 and len(state["seen_files"]) == 0:
+            if len(current_files) == 0 and len(state["seen_files"]) == 0:
             print("   ⚠️ FOLDER IS EMPTY. Waiting for inputs...")
-            return ([], "", 1024, 1024, 0, "IDLE", "")
+            return ([], "", 1024, 1024, 1, "IDLE", "")
         # ----------------------------------
 
         # 3. CALL GEMINI
@@ -161,7 +161,7 @@ class PresenceDirector:
                 state["chat"] = None
                 state["seen_files"] = set()
                 state["queue"] = []
-                return ([], "", 1024, 1024, 0, "DONE", "")
+                return ([], "", 1024, 1024, 1, "DONE", "")
 
             if "queue" in data and isinstance(data["queue"], list):
                 for item in data["queue"]:
@@ -174,11 +174,11 @@ class PresenceDirector:
                 return self._execute_job(active_folder, job)
             else:
                 print("   💤 No jobs in queue. Waiting for next auto-queue.")
-                return ([], "", 1024, 1024, 0, "WORKING", "")
+                return ([], "", 1024, 1024, 1, "WORKING", "")
 
         except Exception as e:
             print(f"❌ Error in Brain Mode: {e}")
-            return ([], "", 1024, 1024, 0, "ERROR", "")
+            return ([], "", 1024, 1024, 1, "ERROR", "")
 
     def _execute_job(self, folder, job):
         # ... (Same as before but with filename return) ...
@@ -209,7 +209,7 @@ class PresenceDirector:
                 global NODE_STATE
                 if folder in NODE_STATE:
                     NODE_STATE[folder]["queue"] = []
-                return ([], "", 1024, 1024, 0, "ERROR", "")
+                return ([], "", 1024, 1024, 1, "ERROR", "")
         
         return (bundle, prompt, w, h, int(batch), "WORKING", output_name)
 
@@ -315,6 +315,9 @@ class PresenceSaver:
             os.makedirs(active_folder, exist_ok=True)
             
         # Clean filename
+        if not filename or filename.strip() == "":
+            filename = "gen"
+            
         if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
             filename = os.path.splitext(filename)[0]
             
