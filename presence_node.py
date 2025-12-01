@@ -311,6 +311,8 @@ class PresenceSaver:
     CATEGORY = "PresenceAI"
 
     def save_images(self, images, active_folder, filename):
+        import folder_paths
+        
         if not os.path.exists(active_folder):
             os.makedirs(active_folder, exist_ok=True)
             
@@ -331,10 +333,21 @@ class PresenceSaver:
             else:
                 fname = f"{filename}_{i+1}.png"
                 
-            path = os.path.join(active_folder, fname)
-            img.save(path, compress_level=4)
-            print(f"   💾 Saved: {fname}")
-            results.append({"filename": fname, "subfolder": "", "type": "output"})
+            # Save to user's folder
+            user_path = os.path.join(active_folder, fname)
+            img.save(user_path, compress_level=4)
+            print(f"   💾 Saved to folder: {user_path}")
+            
+            # ALSO save to ComfyUI temp for preview
+            temp_dir = folder_paths.get_temp_directory()
+            temp_path = os.path.join(temp_dir, fname)
+            img.save(temp_path, compress_level=4)
+            
+            results.append({
+                "filename": fname,
+                "subfolder": "",
+                "type": "temp"
+            })
             
         return {"ui": {"images": results}}
 
