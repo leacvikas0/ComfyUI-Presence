@@ -114,7 +114,7 @@ class PresenceDirector:
                 print(f"   ❌ Error reading {f}: {e}")
 
         # --- SAFETY CHECK: EMPTY FOLDER ---
-            if len(current_files) == 0 and len(state["seen_files"]) == 0:
+        if len(current_files) == 0 and len(state["seen_files"]) == 0:
             print("   ⚠️ FOLDER IS EMPTY. Waiting for inputs...")
             return ([], "", 1024, 1024, 1, "IDLE", "")
         # ----------------------------------
