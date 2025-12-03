@@ -2,8 +2,9 @@ import os
 import time
 import json
 import shutil
+import io
 import vertexai
-from vertexai.generative_models import GenerativeModel
+from vertexai.generative_models import GenerativeModel, Part
 from google.oauth2 import service_account
 import torch
 import numpy as np
@@ -161,8 +162,19 @@ class PresenceDirectorVertex:
                 base_instruction += f"\n\n🚨 USER COMMAND: {user_input}"
                 state["last_input"] = user_input
 
+            # Build message with text and images
             user_message = [base_instruction, file_list_text]
-            user_message.extend(upload_images)
+            
+            # Convert PIL images to Vertex AI Part objects
+            for img in upload_images:
+                # Convert PIL image to bytes
+                img_byte_arr = io.BytesIO()
+                img.save(img_byte_arr, format='PNG')
+                img_byte_arr = img_byte_arr.getvalue()
+                
+                # Create Part object
+                image_part = Part.from_data(data=img_byte_arr, mime_type="image/png")
+                user_message.append(image_part)
             
             print("   🚀 Sending to Gemini 3 Pro...")
             response = chat.send_message(user_message)
