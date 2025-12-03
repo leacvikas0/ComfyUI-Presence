@@ -48,7 +48,35 @@ class PresenceDirector:
 
     RETURN_TYPES = ("UNALIVER_BUNDLE", "STRING", "INT", "INT", "INT", "STRING", "STRING")
     RETURN_NAMES = ("context_bundle", "flux_prompt", "width", "height", "batch_size", "status", "filename")
+    FUNCTION = "run_director"
+    CATEGORY = "PresenceAI"
 
+    def run_director(self, active_folder, api_key, model_name, system_prompt, user_input, reset_history, seed):
+        """Main execution - switches between Brain and Robot modes"""
+        
+        # Ensure folder exists
+        if not os.path.exists(active_folder):
+            os.makedirs(active_folder, exist_ok=True)
+        
+        # Initialize state for this folder
+        global NODE_STATE
+        if active_folder not in NODE_STATE:
+            NODE_STATE[active_folder] = {
+                "chat": None,
+                "seen_files": set(),
+                "queue": [],
+                "last_input": ""
+            }
+        
+        state = NODE_STATE[active_folder]
+        
+        # Handle reset
+        if reset_history:
+            state["chat"] = None
+            state["seen_files"] = set()
+            state["queue"] = []
+            state["last_input"] = ""
+        
         # =================================================================================================
         # 🤖 MODE A: THE ROBOT (EXECUTOR)
         # =================================================================================================
