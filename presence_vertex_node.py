@@ -2,7 +2,9 @@ import os
 import time
 import json
 import shutil
-import google.generativeai as genai
+import vertexai
+from vertexai.generative_models import GenerativeModel
+from google.oauth2 import service_account
 import torch
 import numpy as np
 from PIL import Image, ImageOps
@@ -11,19 +13,20 @@ from PIL import Image, ImageOps
 # GLOBAL STATE MANAGEMENT
 # Key: active_folder_path
 # Value: {
-#   "chat": GenAI_Chat_Object,
+#   "chat": Vertex_Chat_Object,
 #   "seen_files": set(),
 #   "queue": []
 # }
 # --------------------------------------------------------------------------------
 NODE_STATE = {}
 
-class PresenceDirector:
+class PresenceDirectorVertex:
     """
-    🏭 PRESENCE DIRECTOR (Universal v2)
-    - The "Self-Driving Factory" Manager.
-    - Switches between 'Brain Mode' (Gemini) and 'Robot Mode' (Queue Execution).
-    - Manages File System, Context, and Flux Generation.
+    🏭 PRESENCE DIRECTOR (Vertex AI Edition - Gemini 3 Pro)
+    - Uses Vertex AI SDK with Service Account authentication
+    - Gemini 3 Pro ONLY (location='global')
+    - Switches between 'Brain Mode' (Gemini) and 'Robot Mode' (Queue Execution)
+    - Manages File System, Context, and Flux Generation
     """
     
     @classmethod
@@ -31,14 +34,8 @@ class PresenceDirector:
         return {
             "required": {
                 "active_folder": ("STRING", {"default": "C:/Presence/Job_01"}),
-                "api_key": ("STRING", {"default": "ENTER_GEMINI_API_KEY_HERE"}),
-                "model_name": (
-                    [
-                        "gemini-2.5-flash-preview-09-2025",
-                        "gemini-3-pro-preview"
-                    ],
-                    {"default": "gemini-2.5-flash-preview-09-2025"}
-                ),
+                "service_account_json": ("STRING", {"default": "C:/path/to/your-service-account.json"}),
+                "project_id": ("STRING", {"default": "your-project-id"}),
                 "system_prompt": ("STRING", {"multiline": True, "default": "PASTE SYSTEM PROMPT HERE"}),
                 "user_input": ("STRING", {"multiline": True, "default": "", "placeholder": "Type intervention here (sent once)..."}),
                 "reset_history": ("BOOLEAN", {"default": False, "label_on": "RESET ON NEXT RUN", "label_off": "Keep History"}),
@@ -48,13 +45,63 @@ class PresenceDirector:
 
     RETURN_TYPES = ("UNALIVER_BUNDLE", "STRING", "INT", "INT", "INT", "STRING", "STRING")
     RETURN_NAMES = ("context_bundle", "flux_prompt", "width", "height", "batch_size", "status", "filename")
+    FUNCTION = "run_director"
+    CATEGORY = "PresenceAI"
 
+    def run_director(self, active_folder, service_account_json, project_id, system_prompt, user_input, reset_history, seed):
+        """Main execution - switches between Brain and Robot modes"""
+        
+        print(f"\n{'='*80}")
+        print(f"🏭 PRESENCE DIRECTOR (Vertex AI - Gemini 3 Pro)")
+        print(f"{'='*80}")
+        
+        # Ensure folder exists
+        if not os.path.exists(active_folder):
+            os.makedirs(active_folder, exist_ok=True)
+            print(f"📁 Created folder: {active_folder}")
+        
+        # Initialize state for this folder
+        global NODE_STATE
+        if active_folder not in NODE_STATE:
+            NODE_STATE[active_folder] = {
+                "chat": None,
+                "seen_files": set(),
+                "queue": [],
+                "last_input": ""
+            }
+        
+        state = NODE_STATE[active_folder]
+        
+        # Handle reset
+        if reset_history:
+            print("🔄 RESET TRIGGERED. Clearing history...")
+            state["chat"] = None
+            state["seen_files"] = set()
+            state["queue"] = []
+            state["last_input"] = ""
+        
+        # Load persistent state from disk
+        state_file = os.path.join(active_folder, "presence_state.json")
+        if os.path.exists(state_file) and not reset_history:
+            try:
+                with open(state_file, "r") as f:
+                    disk_state = json.load(f)
+                    state["seen_files"] = set(disk_state.get("seen_files", []))
+                    state["queue"] = disk_state.get("queue", [])
+                    print(f"📂 Loaded state: {len(state['seen_files'])} seen files, {len(state['queue'])} queued jobs")
+            except Exception as e:
+                print(f"⚠️ Could not load state: {e}")
+        
         # =================================================================================================
         # 🤖 MODE A: THE ROBOT (EXECUTOR)
         # =================================================================================================
         if len(state["queue"]) > 0:
             print(f"🤖 ROBOT MODE: Executing job 1 of {len(state['queue'])}...")
             job = state["queue"].pop(0)
+            
+            # Save state after popping job
+            self._save_state(active_folder, state)
+            
             return self._execute_job(active_folder, job)
 
         # =================================================================================================
@@ -104,7 +151,7 @@ class PresenceDirector:
         # 3. CALL GEMINI
         try:
             if state["chat"] is None:
-                self._init_gemini(state, api_key, model_name, system_prompt)
+                self._init_vertex_ai(state, service_account_json, project_id, system_prompt)
             
             chat = state["chat"]
             
@@ -117,12 +164,12 @@ class PresenceDirector:
             user_message = [base_instruction, file_list_text]
             user_message.extend(upload_images)
             
-            print("   🚀 Sending to Gemini...")
+            print("   🚀 Sending to Gemini 3 Pro...")
             response = chat.send_message(user_message)
             response_text = response.text
             
             print("\n" + "="*50)
-            print("🤖 FULL GEMINI RESPONSE:")
+            print("🤖 FULL GEMINI 3 PRO RESPONSE:")
             print(response_text)
             print("="*50 + "\n")
             
@@ -143,16 +190,21 @@ class PresenceDirector:
                 state["chat"] = None
                 state["seen_files"] = set()
                 state["queue"] = []
+                self._save_state(active_folder, state)
                 return ([], "", 1024, 1024, 1, "DONE", "")
 
             if "queue" in data and isinstance(data["queue"], list):
                 for item in data["queue"]:
                     state["queue"].append(item)
                 print(f"   📥 Added {len(data['queue'])} jobs to Queue.")
+            
+            # Save state
+            self._save_state(active_folder, state)
 
             if len(state["queue"]) > 0:
                 print("   ⚡ Immediate Trigger: Executing first job...")
                 job = state["queue"].pop(0)
+                self._save_state(active_folder, state)
                 return self._execute_job(active_folder, job)
             else:
                 print("   💤 No jobs in queue. Waiting for next auto-queue.")
@@ -160,10 +212,12 @@ class PresenceDirector:
 
         except Exception as e:
             print(f"❌ Error in Brain Mode: {e}")
+            import traceback
+            traceback.print_exc()
             return ([], "", 1024, 1024, 1, "ERROR", "")
 
     def _execute_job(self, folder, job):
-        # ... (Same as before but with filename return) ...
+        """Executes a generation job from the queue"""
         prompt = job.get("prompt", "")
         w = job.get("w", 1024)
         h = job.get("h", 1024)
@@ -195,41 +249,41 @@ class PresenceDirector:
         
         return (bundle, prompt, w, h, int(batch), "WORKING", output_name)
 
-    def _init_gemini(self, state, api_key, model_name, system_prompt):
-        """Initializes the Gemini Session with Fallback and Thinking Mode"""
-        genai.configure(api_key=api_key)
+    def _init_vertex_ai(self, state, service_account_json, project_id, system_prompt):
+        """Initializes Vertex AI with Service Account and Gemini 3 Pro"""
+        print(f"   🔐 Authenticating with service account: {service_account_json}")
         
-        models_to_try = [model_name]
-        fallbacks = ["gemini-3-pro-preview", "gemini-2.5-flash-preview-09-2025"]
-        for fb in fallbacks:
-            if fb != model_name:
-                models_to_try.append(fb)
-        
-        for m_name in models_to_try:
-            try:
-                print(f"   Trying model: {m_name}...")
-                
-                # --- ENABLE THINKING MODE ---
-                # For Gemini 2.5 Flash, thinking is default, but we can be explicit.
-                # We use a generous budget to ensure it thinks deeply.
-                # Note: If the SDK version is old, this might be ignored, which is safe.
-                generation_config = {
-                    "thinking_config": {"include_thoughts": True} 
-                }
-                # ----------------------------
-
-                model = genai.GenerativeModel(
-                    m_name, 
-                    system_instruction=system_prompt
-                    # generation_config=generation_config # Uncomment if SDK supports it fully
-                )
-                state["chat"] = model.start_chat(history=[])
-                print(f"   ✨ Session Started with {m_name} (Thinking Enabled)")
-                return
-            except Exception as e:
-                print(f"   ❌ Failed {m_name}: {e}")
-        
-        raise Exception("Could not load ANY Gemini model.")
+        try:
+            # Load credentials
+            credentials = service_account.Credentials.from_service_account_file(
+                service_account_json,
+                scopes=['https://www.googleapis.com/auth/cloud-platform']
+            )
+            
+            # Initialize Vertex AI
+            # CRITICAL: location='global' is required for Gemini 3 Pro
+            vertexai.init(
+                project=project_id,
+                location="global",  # Gemini 3 Pro is global-only
+                credentials=credentials
+            )
+            
+            print(f"   ✅ Vertex AI initialized (project={project_id}, location=global)")
+            
+            # Create Gemini 3 Pro model
+            model = GenerativeModel(
+                "gemini-3-pro-preview",
+                system_instruction=system_prompt
+            )
+            
+            # Start chat session
+            state["chat"] = model.start_chat(history=[])
+            
+            print(f"   ✨ Session Started with Gemini 3 Pro")
+            
+        except Exception as e:
+            print(f"   ❌ Failed to initialize Vertex AI: {e}")
+            raise Exception(f"Vertex AI initialization failed: {e}")
 
     def _parse_json(self, text):
         """Robust JSON extraction"""
@@ -271,6 +325,19 @@ class PresenceDirector:
                     print(f"     🏷️ Renamed: {src} -> {dest}")
                 except Exception as e:
                     print(f"     ❌ Rename Failed: {e}")
+    
+    def _save_state(self, folder, state):
+        """Save state to disk for persistence"""
+        state_file = os.path.join(folder, "presence_state.json")
+        try:
+            disk_state = {
+                "seen_files": list(state["seen_files"]),
+                "queue": state["queue"]
+            }
+            with open(state_file, "w") as f:
+                json.dump(disk_state, f, indent=2)
+        except Exception as e:
+            print(f"⚠️ Could not save state: {e}")
 
 class PresenceSaver:
     """
@@ -334,11 +401,11 @@ class PresenceSaver:
         return {"ui": {"images": results}}
 
 NODE_CLASS_MAPPINGS = {
-    "PresenceDirector": PresenceDirector,
+    "PresenceDirectorVertex": PresenceDirectorVertex,
     "PresenceSaver": PresenceSaver
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "PresenceDirector": "Presence Director 🏭",
+    "PresenceDirectorVertex": "Presence Director (Vertex AI) 🏭",
     "PresenceSaver": "Presence Saver 💾"
 }
