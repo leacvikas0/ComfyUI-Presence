@@ -76,9 +76,6 @@ class FluxAdaptiveInjector:
                 "conditioning": ("CONDITIONING",), 
                 "vae": ("VAE",),
                 "image_bundle": ("UNALIVER_BUNDLE",),
-            },
-            "optional": {
-                "megapixels": ("FLOAT", {"default": 1.0, "min": 0.5, "max": 2.0, "step": 0.1}),
             }
         }
 
@@ -87,7 +84,7 @@ class FluxAdaptiveInjector:
     FUNCTION = "inject_references"
     CATEGORY = "Unaliver"
 
-    def inject_references(self, conditioning, vae, image_bundle, megapixels=1.0):
+    def inject_references(self, conditioning, vae, image_bundle):
         print(f"💉 FLUX INJECTOR v4.0 (NHWC-correct): Encoding {len(image_bundle)} references...")
         
         reference_latents = []
@@ -101,7 +98,7 @@ class FluxAdaptiveInjector:
         print(f"   VAE device: {vae_device}")
 
         for i, image_tensor in enumerate(image_bundle):
-            # image_tensor is already [1, H, W, 3] NHWC from planner
+            # image_tensor is already [1, H, W, 3] NHWC from Director
             B, H, W, C = image_tensor.shape
             print(f"   📐 Image {i+1} input shape: {image_tensor.shape} (NHWC)")
             
@@ -109,27 +106,9 @@ class FluxAdaptiveInjector:
                 print(f"   ⚠️ Skipping invalid image {i+1}")
                 continue
             
-            # Calculate target size (multiples of 64)
-            current_pixels = H * W
-            target_pixels = megapixels * 1024 * 1024
-            scale_factor = (target_pixels / current_pixels) ** 0.5
-            new_H = int(H * scale_factor)
-            new_W = int(W * scale_factor)
-            
-            # Round to multiples of 64
-            new_H = ((new_H + 32) // 64) * 64
-            new_W = ((new_W + 32) // 64) * 64
-            new_H = max(64, new_H)
-            new_W = max(64, new_W)
-            
-            print(f"   🔄 Resizing: {H}x{W} -> {new_H}x{new_W}")
-            
-            # Resize (requires NCHW for interpolate)
+            # Images come pre-sized from Director - no resizing here
+            # Convert to NCHW for format consistency
             pixels_nchw = image_tensor.permute(0, 3, 1, 2).contiguous()
-            if new_H != H or new_W != W:
-                pixels_nchw = torch.nn.functional.interpolate(
-                    pixels_nchw, size=(new_H, new_W), mode="bilinear", align_corners=False
-                )
             
             # Convert BACK to NHWC (ComfyUI VAE requirement)
             pixels_nhwc = pixels_nchw.permute(0, 2, 3, 1).contiguous()
@@ -141,12 +120,11 @@ class FluxAdaptiveInjector:
             print(f"   📐 Pre-VAE shape: {pixels_nhwc.shape} (NHWC, range [{pixels_nhwc.min():.2f}, {pixels_nhwc.max():.2f}])")
             
             try:
-                # Move to VAE device (do this LAST to prevent CPU reversion)
+                # Move to VAE device
                 pixels_final = pixels_nhwc.to(vae_device).contiguous()
                 print(f"   🖥️ Moved to: {pixels_final.device}")
                 
-                # DO NOT scale to [-1, 1] - VAE handles this internally
-                # Just pass [0, 1] NHWC tensor
+                # VAE encodes [0, 1] NHWC tensor
                 latent = vae.encode(pixels_final)
                 
                 # Handle return types
@@ -156,7 +134,7 @@ class FluxAdaptiveInjector:
                     latent = latent["samples"]
                 
                 reference_latents.append(latent)
-                print(f"   ✅ Encoded Image {i+1} -> latent shape: {latent.shape}")
+                print(f"   ✅ Encoded Image {i+1} → latent shape: {latent.shape}")
                 
             except Exception as e:
                 print(f"❌ VAE Error on Image {i+1}: {e}")
@@ -164,8 +142,6 @@ class FluxAdaptiveInjector:
                 traceback.print_exc()
 
         # Inject LIST of latents into conditioning (Flux 2 expects list)
-        # CRITICAL FIX: Only inject if we actually have references. 
-        # Injecting an empty list [] causes Flux attention layers to crash with "tensor of 0 elements"
         if len(reference_latents) > 0:
             c_out = []
             for t in conditioning:

@@ -122,6 +122,17 @@ class PresenceDirectorVertex:
             file_list_text += f"- {f}\n"
             
         upload_images = []
+        
+        # Get quality mode from state (set by AI in previous iteration)
+        quality_mode = state.get("quality_mode", "standard")
+        
+        if quality_mode == "high":
+            target_pixels = 2048 * 1024  # 2MP
+            print(f"   📐 Upload quality: HIGH (2MP) - Detailed analysis mode")
+        else:
+            target_pixels = 1024 * 1024  # 1MP
+            print(f"   📐 Upload quality: STANDARD (1MP)")
+        
         print(f"   - Found {len(new_files)} new images to upload.")
         for f in new_files:
             path = os.path.join(active_folder, f)
@@ -129,15 +140,15 @@ class PresenceDirectorVertex:
                 img = Image.open(path)
                 img = ImageOps.exif_transpose(img)
                 
-                # Resize to ~1 megapixel for Gemini (saves API costs)
+                # AI-controlled resolution
                 current_pixels = img.width * img.height
-                target_pixels = 1024 * 1024  # 1MP
                 if current_pixels > target_pixels:
                     scale_factor = (target_pixels / current_pixels) ** 0.5
                     new_width = int(img.width * scale_factor)
                     new_height = int(img.height * scale_factor)
                     img = img.resize((new_width, new_height), Image.LANCZOS)
-                    print(f"   📐 Resized {f}: {img.width}x{img.height} (~1MP)")
+                    mp_label = "2MP" if quality_mode == "high" else "1MP"
+                    print(f"   📐 Resized {f}: {img.width}x{img.height} (~{mp_label})")
                 
                 upload_images.append(img)
             except Exception as e:
@@ -186,6 +197,13 @@ class PresenceDirectorVertex:
             print("="*50 + "\n")
             
             data = self._parse_json(response_text)
+            
+            # Check if AI requested quality change for NEXT iteration
+            if "analysis_quality" in data:
+                new_quality = data["analysis_quality"]
+                if new_quality in ["standard", "high"]:
+                    state["quality_mode"] = new_quality
+                    print(f"   🎯 Quality mode set to {new_quality.upper()} for next iteration")
             
             if "ops" in data:
                 for op in data["ops"]:
@@ -236,6 +254,7 @@ class PresenceDirectorVertex:
         batch = job.get("batch", 1)
         output_name = job.get("output_name", "gen")
         load_list = job.get("load", [])
+        padding_spec = job.get("padding", None)
         
         bundle = []
         print(f"   📦 Bundling: {load_list}")
@@ -246,14 +265,23 @@ class PresenceDirectorVertex:
                 try:
                     img = Image.open(path).convert("RGB")
                     img = ImageOps.exif_transpose(img)
+                    
+                    print(f"   ✅ Loaded {filename}: {img.width}x{img.height}")
+                    
+                    # Apply padding if specified
+                    if padding_spec:
+                        img = self._apply_padding(img, padding_spec, filename)
+                    
+                    # Convert to tensor
                     i = np.array(img).astype(np.float32) / 255.0
                     tensor = torch.from_numpy(i)[None,]
                     bundle.append(tensor)
+                    print(f"      → Tensor: {tensor.shape} (NHWC)")
                 except Exception as e:
                     print(f"     ❌ Failed to load {filename}: {e}")
             else:
                 print(f"     ⚠️ File not found: {filename}")
-                print("     🛑 CRITICAL ERROR: Missing file. Aborting Queue.")
+                print(f"     🛑 CRITICAL ERROR: Missing file. Aborting Queue.")
                 global NODE_STATE
                 if folder in NODE_STATE:
                     NODE_STATE[folder]["queue"] = []
@@ -337,6 +365,132 @@ class PresenceDirectorVertex:
                     print(f"     🏷️ Renamed: {src} -> {dest}")
                 except Exception as e:
                     print(f"     ❌ Rename Failed: {e}")
+    
+    def _apply_padding(self, img, padding_spec, filename="image"):
+        """Apply smart two-stage padding system"""
+        original_w, original_h = img.width, img.height
+        print(f"\n   🎨 PADDING: {filename}")
+        print(f"   ├─ Original: {original_w}x{original_h}")
+        
+        # Stage 1: Directional Padding
+        if "directional" in padding_spec:
+            print(f"   ├─ STAGE 1: Directional Padding")
+            directional = padding_spec["directional"]
+            
+            def parse_value(val, dimension):
+                if isinstance(val, str) and "%" in val:
+                    percent = float(val.replace("%", ""))
+                    return int(dimension * percent / 100)
+                return int(val)
+            
+            pad_left = parse_value(directional.get("left", 0), original_w)
+            pad_right = parse_value(directional.get("right", 0), original_w)
+            pad_top = parse_value(directional.get("top", 0), original_h)
+            pad_bottom = parse_value(directional.get("bottom", 0), original_h)
+            
+            if pad_left: print(f"   │  ├─ Left: +{pad_left}px")
+            if pad_right: print(f"   │  ├─ Right: +{pad_right}px")
+            if pad_top: print(f"   │  ├─ Top: +{pad_top}px")
+            if pad_bottom: print(f"   │  └─ Bottom: +{pad_bottom}px")
+            
+            new_w = original_w + pad_left + pad_right
+            new_h = original_h + pad_top + pad_bottom
+            
+            fill_color = self._get_fill_color(padding_spec.get("fill_color", "white"))
+            temp_img = Image.new("RGB", (new_w, new_h), fill_color)
+            temp_img.paste(img, (pad_left, pad_top))
+            img = temp_img
+            print(f"   └─ After Stage 1: {new_w}x{new_h}")
+        
+        # Stage 2: Aspect Ratio Padding
+        if "target_aspect" in padding_spec:
+            print(f"   ├─ STAGE 2: Aspect Ratio Target")
+            target_aspect = padding_spec["target_aspect"]
+            target_w, target_h = map(int, target_aspect.split(":"))
+            target_ratio = target_w / target_h
+            current_ratio = img.width / img.height
+            
+            print(f"   │  ├─ Current ratio: {current_ratio:.3f}")
+            print(f"   │  └─ Target ratio: {target_ratio:.3f} ({target_aspect})")
+            
+            if abs(current_ratio - target_ratio) < 0.01:
+                print(f"   └─ Already at {target_aspect}, no padding needed")
+                return img
+            
+            position = padding_spec.get("position", "center")
+            
+            if current_ratio < target_ratio:
+                # Too tall, add width
+                required_w = int(img.height * target_ratio)
+                pad_total = required_w - img.width
+                
+                if position == "left":
+                    pad_left, pad_right = 0, pad_total
+                elif position == "right":
+                    pad_left, pad_right = pad_total, 0
+                else:
+                    pad_left = pad_total // 2
+                    pad_right = pad_total - pad_left
+                
+                pad_top = pad_bottom = 0
+                print(f"   │  ├─ Need: +{pad_total}px width")
+                print(f"   │  └─ Distribution: L+{pad_left}px, R+{pad_right}px")
+            else:
+                # Too wide, add height
+                required_h = int(img.width / target_ratio)
+                pad_total = required_h - img.height
+                
+                if position == "top":
+                    pad_top, pad_bottom = 0, pad_total
+                elif position == "bottom":
+                    pad_top, pad_bottom = pad_total, 0
+                else:
+                    pad_top = pad_total // 2
+                    pad_bottom = pad_total - pad_top
+                
+                pad_left = pad_right = 0
+                print(f"   │  ├─ Need: +{pad_total}px height")
+                print(f"   │  └─ Distribution: T+{pad_top}px, B+{pad_bottom}px")
+            
+            final_w = img.width + pad_left + pad_right
+            final_h = img.height + pad_top + pad_bottom
+            
+            fill_color = self._get_fill_color(padding_spec.get("fill_color", "white"))
+            padded = Image.new("RGB", (final_w, final_h), fill_color)
+            padded.paste(img, (pad_left, pad_top))
+            
+            print(f"   └─ Final: {final_w}x{final_h} ({target_aspect} ✓)\n")
+            return padded
+        
+        elif "left" in padding_spec or "right" in padding_spec:
+            # Explicit pixel padding (Mode 3)
+            pad_left = padding_spec.get("left", 0)
+            pad_right = padding_spec.get("right", 0)
+            pad_top = padding_spec.get("top", 0)
+            pad_bottom = padding_spec.get("bottom", 0)
+            
+            final_w = img.width + pad_left + pad_right
+            final_h = img.height + pad_top + pad_bottom
+            
+            fill_color = self._get_fill_color(padding_spec.get("fill_color", "white"))
+            padded = Image.new("RGB", (final_w, final_h), fill_color)
+            padded.paste(img, (pad_left, pad_top))
+            
+            print(f"   └─ Explicit padding: {final_w}x{final_h}\n")
+            return padded
+        
+        return img
+    
+    def _get_fill_color(self, color_spec):
+        """Convert color specification to RGB tuple"""
+        if color_spec == "white":
+            return (255, 255, 255)
+        elif color_spec == "black":
+            return (0, 0, 0)
+        elif color_spec == "gray":
+            return (128, 128, 128)
+        else:
+            return (255, 255, 255)  # Default white
     
     def _save_state(self, folder, state):
         """Save state to disk for persistence"""
