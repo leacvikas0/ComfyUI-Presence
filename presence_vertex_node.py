@@ -123,33 +123,14 @@ class PresenceDirectorVertex:
             
         upload_images = []
         
-        # Get quality mode from state (set by AI in previous iteration)
-        quality_mode = state.get("quality_mode", "standard")
-        
-        if quality_mode == "high":
-            target_pixels = 2048 * 1024  # 2MP
-            print(f"   📐 Upload quality: HIGH (2MP) - Detailed analysis mode")
-        else:
-            target_pixels = 1024 * 1024  # 1MP
-            print(f"   📐 Upload quality: STANDARD (1MP)")
-        
-        print(f"   - Found {len(new_files)} new images to upload.")
+        # Send ORIGINAL resolution to Gemini/Qwen (cheap, no resizing)
+        print(f"   - Found {len(new_files)} new images to upload (ORIGINAL resolution).")
         for f in new_files:
             path = os.path.join(active_folder, f)
             try:
                 img = Image.open(path)
                 img = ImageOps.exif_transpose(img)
-                
-                # AI-controlled resolution
-                current_pixels = img.width * img.height
-                if current_pixels > target_pixels:
-                    scale_factor = (target_pixels / current_pixels) ** 0.5
-                    new_width = int(img.width * scale_factor)
-                    new_height = int(img.height * scale_factor)
-                    img = img.resize((new_width, new_height), Image.LANCZOS)
-                    mp_label = "2MP" if quality_mode == "high" else "1MP"
-                    print(f"   📐 Resized {f}: {img.width}x{img.height} (~{mp_label})")
-                
+                print(f"   📤 Uploading {f}: {img.width}x{img.height} (original)")
                 upload_images.append(img)
             except Exception as e:
                 print(f"   ❌ Error reading {f}: {e}")
@@ -197,13 +178,6 @@ class PresenceDirectorVertex:
             print("="*50 + "\n")
             
             data = self._parse_json(response_text)
-            
-            # Check if AI requested quality change for NEXT iteration
-            if "analysis_quality" in data:
-                new_quality = data["analysis_quality"]
-                if new_quality in ["standard", "high"]:
-                    state["quality_mode"] = new_quality
-                    print(f"   🎯 Quality mode set to {new_quality.upper()} for next iteration")
             
             if "ops" in data:
                 for op in data["ops"]:
@@ -259,7 +233,15 @@ class PresenceDirectorVertex:
         bundle = []
         print(f"   📦 Bundling: {load_list}")
         
-        for filename in load_list:
+        for item in load_list:
+            # Parse item - can be string "file.jpg" or dict {"file": "file.jpg", "mp": 2}
+            if isinstance(item, dict):
+                filename = item.get("file")
+                target_mp = item.get("mp", 1)  # Default 1MP
+            else:
+                filename = item
+                target_mp = 1  # Default 1MP
+            
             path = os.path.join(folder, filename)
             if os.path.exists(path):
                 try:
@@ -268,7 +250,20 @@ class PresenceDirectorVertex:
                     
                     print(f"   ✅ Loaded {filename}: {img.width}x{img.height}")
                     
-                    # Apply padding if specified
+                    # Resize to target MP for Flux
+                    current_pixels = img.width * img.height
+                    target_pixels = target_mp * 1024 * 1024
+                    
+                    if current_pixels > target_pixels:
+                        scale_factor = (target_pixels / current_pixels) ** 0.5
+                        new_width = int(img.width * scale_factor)
+                        new_height = int(img.height * scale_factor)
+                        img = img.resize((new_width, new_height), Image.LANCZOS)
+                        print(f"      🔽 Resized to {target_mp}MP: {img.width}x{img.height}")
+                    else:
+                        print(f"      ✓ Using as-is ({target_mp}MP target, already smaller)")
+                    
+                    # Apply padding if specified (padding spec applies to ALL loaded images)
                     if padding_spec:
                         img = self._apply_padding(img, padding_spec, filename)
                     
