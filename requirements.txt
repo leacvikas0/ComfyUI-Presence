@@ -1,0 +1,13 @@
+# Presence AI - Memorial Video Production System
+# Dependencies for Fireworks AI & Vertex AI integration
+
+# Vertex AI (Gemini) support
+google-cloud-aiplatform>=1.38.0
+
+# Fireworks AI (Qwen3-VL) support  
+requests>=2.31.0
+
+# Image processing (usually included in ComfyUI, but listed for completeness)
+Pillow>=10.0.0
+
+# Note: torch and numpy are ComfyUI dependencies and don't need explicit installation
