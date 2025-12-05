@@ -1,22 +1,19 @@
-from .archive import NODE_CLASS_MAPPINGS as ARCHIVE_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS as ARCHIVE_DISPLAY_MAPPINGS
-from .unaliver_nodes import FluxAdaptiveInjector
-from .presence_node import PresenceDirector, PresenceSaver
+from .unaliver_nodes import FluxAdaptiveInjector, PresenceSaver
 from .presence_vertex_node import PresenceDirectorVertex
+from .presence_fireworks_node import PresenceDirectorFireworks
 
 NODE_CLASS_MAPPINGS = {
-    **ARCHIVE_MAPPINGS,
     "FluxAdaptiveInjector": FluxAdaptiveInjector,
-    "PresenceDirector": PresenceDirector,
+    "PresenceSaver": PresenceSaver,
     "PresenceDirectorVertex": PresenceDirectorVertex,
-    "PresenceSaver": PresenceSaver
+    "PresenceDirectorFireworks": PresenceDirectorFireworks
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    **ARCHIVE_DISPLAY_MAPPINGS,
-    "FluxAdaptiveInjector": "Flux Adaptive Injector 💉",
-    "PresenceDirector": "Presence Director 🏭",
-    "PresenceDirectorVertex": "Presence Director (Vertex AI) 🚀",
-    "PresenceSaver": "Presence Saver 💾"
+    "FluxAdaptiveInjector": "💉 Flux Adaptive Injector",
+    "PresenceSaver": "💾 Presence Saver",
+    "PresenceDirectorVertex": "🏭 Presence Director (Vertex AI)",
+    "PresenceDirectorFireworks": "🔥 Presence Director (Fireworks AI)"
 }
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
