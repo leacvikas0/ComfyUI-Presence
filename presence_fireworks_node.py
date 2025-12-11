@@ -251,8 +251,9 @@ class PresenceDirectorFireworks:
             
             payload = {
                 "model": "accounts/fireworks/models/qwen3-vl-235b-a22b-thinking",
-                "max_tokens": 4096,  # Max for non-streaming (streaming requires refactor)
+                "max_tokens": 32768,  # Can go high with streaming!
                 "temperature": 0.6,
+                "stream": True,  # STREAMING ENABLED
                 "messages": messages
             }
             
@@ -261,55 +262,64 @@ class PresenceDirectorFireworks:
                 "Content-Type": "application/json"
             }
             
-            print(f"   🔥 Calling Fireworks AI (Qwen3-VL)...")
+            print(f"   🔥 Calling Fireworks AI (Qwen3-VL) with STREAMING...")
             print(f"      Model: {payload['model']}")
             print(f"      Max tokens: {payload['max_tokens']}")
             
+            # Streaming request
             response = requests.post(
                 "https://api.fireworks.ai/inference/v1/chat/completions",
                 headers=headers,
                 json=payload,
-                timeout=300  # 5 min timeout for long responses
+                timeout=600,  # 10 min timeout for streaming
+                stream=True
             )
             
-            # Check for errors and show detailed message
+            # Check for errors
             if response.status_code != 200:
                 print(f"\n   ❌ API ERROR {response.status_code}:")
                 print(f"      {response.text[:500]}")
                 response.raise_for_status()
             
-            result = response.json()
+            # Accumulate streaming response
+            response_text = ""
+            token_count = 0
+            print(f"\n   📡 STREAMING RESPONSE:")
+            print(f"      ", end="", flush=True)
             
-            # Log token usage
-            if "usage" in result:
-                usage = result["usage"]
-                input_tokens = usage.get("prompt_tokens", 0)
-                output_tokens = usage.get("completion_tokens", 0)
-                total_tokens = usage.get("total_tokens", 0)
-                
-                # Cost calculation (Qwen3-VL pricing)
-                cost = (input_tokens * 0.22 / 1_000_000) + (output_tokens * 0.88 / 1_000_000)
-                
-                print(f"\n   📊 TOKEN USAGE:")
-                print(f"      Input:  {input_tokens:,} tokens")
-                print(f"      Output: {output_tokens:,} tokens")
-                print(f"      Total:  {total_tokens:,} tokens")
-                print(f"      Cost:   ${cost:.4f}")
+            for line in response.iter_lines():
+                if line:
+                    line_text = line.decode('utf-8')
+                    if line_text.startswith("data: "):
+                        data_str = line_text[6:]  # Remove "data: " prefix
+                        if data_str.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            if "choices" in chunk and len(chunk["choices"]) > 0:
+                                delta = chunk["choices"][0].get("delta", {})
+                                content = delta.get("content", "")
+                                if content:
+                                    response_text += content
+                                    token_count += 1
+                                    # Show progress every 100 tokens
+                                    if token_count % 100 == 0:
+                                        print(f"█", end="", flush=True)
+                        except json.JSONDecodeError:
+                            pass
             
-            # Extract response
-            response_text = result["choices"][0]["message"]["content"]
+            print(f" ({token_count} chunks)")
+            
+            # Log approximate usage
+            print(f"\n   📊 STREAMING COMPLETE:")
+            print(f"      Output chunks: {token_count}")
+            print(f"      Response length: {len(response_text)} chars")
             
             # Diagnostic: Show raw response info
-            print(f"\n   📥 RAW RESPONSE RECEIVED:")
-            print(f"      Length: {len(response_text)} chars")
+            print(f"\n   📥 RESPONSE ANALYSIS:")
             print(f"      Contains <think>: {'<think>' in response_text}")
             print(f"      Contains </think>: {'</think>' in response_text}")
             print(f"      Starts with {{: {response_text.strip().startswith('{')}")
-            
-            # Check if response was truncated (hit max_tokens)
-            if "usage" in result:
-                if result["usage"].get("completion_tokens", 0) >= 16380:
-                    print(f"      ⚠️ WARNING: Output hit token limit! Response may be truncated.")
             if "</think>" in response_text:
                 thinking_part, final_answer = response_text.split("</think>", 1)
                 
