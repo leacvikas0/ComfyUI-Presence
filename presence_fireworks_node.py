@@ -251,7 +251,7 @@ class PresenceDirectorFireworks:
             
             payload = {
                 "model": "accounts/fireworks/models/qwen3-vl-235b-a22b-thinking",
-                "max_tokens": 150000,  # Very high - model can think as long as needed
+                "max_tokens": 32768,  # Max allowed by Fireworks for this model
                 "temperature": 0.6,
                 "messages": messages
             }
@@ -269,10 +269,15 @@ class PresenceDirectorFireworks:
                 "https://api.fireworks.ai/inference/v1/chat/completions",
                 headers=headers,
                 json=payload,
-                timeout=180  # Increased timeout for large responses
+                timeout=300  # 5 min timeout for long responses
             )
             
-            response.raise_for_status()
+            # Check for errors and show detailed message
+            if response.status_code != 200:
+                print(f"\n   ❌ API ERROR {response.status_code}:")
+                print(f"      {response.text[:500]}")
+                response.raise_for_status()
+            
             result = response.json()
             
             # Log token usage
