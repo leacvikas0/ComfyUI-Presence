@@ -250,13 +250,10 @@ class PresenceDirectorFireworks:
                     thinking_part = thinking_part.split("<think>", 1)[1]
                 
                 print(f"\n{'='*80}")
-                print(f"🧠 AI THINKING PROCESS (truncated):")
+                print(f"🧠 AI THINKING PROCESS ({len(thinking_part)} chars):")
                 print(f"{'='*80}")
-                # Only show first 500 chars of thinking to avoid log spam
-                thinking_preview = thinking_part.strip()[:500]
-                print(thinking_preview)
-                if len(thinking_part) > 500:
-                    print(f"... ({len(thinking_part) - 500} more chars)")
+                # Show FULL thinking output
+                print(thinking_part.strip())
                 print(f"{'='*80}\n")
                 
                 response_text = final_answer.strip()
