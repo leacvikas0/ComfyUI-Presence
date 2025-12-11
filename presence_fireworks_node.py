@@ -8,6 +8,7 @@ import base64
 import torch
 import numpy as np
 from PIL import Image, ImageOps
+from datetime import datetime
 
 # --------------------------------------------------------------------------------
 # GLOBAL STATE MANAGEMENT
@@ -19,6 +20,68 @@ from PIL import Image, ImageOps
 # }
 # --------------------------------------------------------------------------------
 NODE_STATE = {}
+
+# --------------------------------------------------------------------------------
+# PROJECT LOGGER - Writes to both console AND project log file
+# --------------------------------------------------------------------------------
+class ProjectLogger:
+    def __init__(self, folder):
+        self.folder = folder
+        self.log_file = os.path.join(folder, "presence_log.txt")
+        
+    def log(self, message, also_print=True):
+        """Log message to file and optionally to console"""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_line = f"[{timestamp}] {message}"
+        
+        # Write to file
+        try:
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(log_line + "\n")
+        except Exception as e:
+            print(f"⚠️ Could not write to log: {e}")
+        
+        # Also print to console
+        if also_print:
+            print(message)
+    
+    def section(self, title):
+        """Log a section header"""
+        line = "=" * 60
+        self.log(line)
+        self.log(title)
+        self.log(line)
+    
+    def subsection(self, title):
+        """Log a subsection header"""
+        line = "-" * 40
+        self.log(line)
+        self.log(title)
+        self.log(line)
+    
+    def job_details(self, job):
+        """Log full job details"""
+        self.subsection("📋 JOB DETAILS")
+        self.log(f"   Prompt: {job.get('prompt', 'N/A')}")
+        self.log(f"   Output Name: {job.get('output_name', 'gen')}")
+        self.log(f"   Width: {job.get('w', 1024)}")
+        self.log(f"   Height: {job.get('h', 1024)}")
+        self.log(f"   Batch: {job.get('batch', 1)}")
+        self.log(f"   MP: {job.get('mp', 1)}MP")
+        
+        load_list = job.get('load', [])
+        self.log(f"   Load List ({len(load_list)} items):")
+        for item in load_list:
+            if isinstance(item, dict):
+                self.log(f"      - {item.get('file')} @ {item.get('mp', 1)}MP")
+            else:
+                self.log(f"      - {item} @ 1MP (default)")
+        
+        padding = job.get('padding')
+        if padding:
+            self.log(f"   Padding: {json.dumps(padding)}")
+        else:
+            self.log(f"   Padding: None")
 
 class PresenceDirectorFireworks:
     """
@@ -50,16 +113,18 @@ class PresenceDirectorFireworks:
     def run_director(self, active_folder, api_key, system_prompt, user_input, reset_history, seed):
         """Main execution - switches between Brain and Robot modes"""
         
-        print(f"\n{'='*80}")
-        print(f"🔥 PRESENCE DIRECTOR (Fireworks AI - Qwen3-VL)")
-        print(f"{'='*80}")
-        print(f"   📂 Active folder: {active_folder}")
-        print(f"   🔄 Reset requested: {reset_history}")
-        
-        # Ensure folder exists
+        # Ensure folder exists first
         if not os.path.exists(active_folder):
             os.makedirs(active_folder, exist_ok=True)
-            print(f"   📁 Created folder: {active_folder}")
+        
+        # Initialize project logger
+        logger = ProjectLogger(active_folder)
+        
+        logger.section("🔥 PRESENCE DIRECTOR (Fireworks AI - Qwen3-VL)")
+        logger.log(f"   📂 Active folder: {active_folder}")
+        logger.log(f"   🔄 Reset requested: {reset_history}")
+        logger.log(f"   🌱 Seed: {seed}")
+        logger.log(f"   📝 System prompt length: {len(system_prompt)} chars")
         
         global NODE_STATE
         state_file = os.path.join(active_folder, "presence_state.json")
@@ -409,6 +474,9 @@ class PresenceDirectorFireworks:
 
     def _execute_job(self, folder, job):
         """Executes a generation job from the queue"""
+        # Initialize logger for this project
+        logger = ProjectLogger(folder)
+        
         prompt = job.get("prompt", "")
         w = job.get("w", 1024)
         h = job.get("h", 1024)
@@ -416,9 +484,14 @@ class PresenceDirectorFireworks:
         output_name = job.get("output_name", "gen")
         load_list = job.get("load", [])
         padding_spec = job.get("padding", None)
+        mp = job.get("mp", 1)
+        
+        # Log full job details
+        logger.section("🤖 ROBOT MODE: EXECUTING JOB")
+        logger.job_details(job)
         
         bundle = []
-        print(f"   📦 Bundling: {load_list}")
+        logger.log(f"\n   📦 Loading images for Flux...")
         
         for item in load_list:
             # Parse item - can be string "file.jpg" or dict {"file": "file.jpg", "mp": 2}
