@@ -53,69 +53,90 @@ class PresenceDirectorFireworks:
         print(f"\n{'='*80}")
         print(f"🔥 PRESENCE DIRECTOR (Fireworks AI - Qwen3-VL)")
         print(f"{'='*80}")
+        print(f"   📂 Active folder: {active_folder}")
+        print(f"   🔄 Reset requested: {reset_history}")
         
         # Ensure folder exists
         if not os.path.exists(active_folder):
             os.makedirs(active_folder, exist_ok=True)
-            print(f"📁 Created folder: {active_folder}")
+            print(f"   📁 Created folder: {active_folder}")
         
-        # Initialize state for this folder
         global NODE_STATE
-        if active_folder not in NODE_STATE:
+        state_file = os.path.join(active_folder, "presence_state.json")
+        
+        # =========================================================
+        # ROBUST RESET: Complete nuclear option
+        # =========================================================
+        if reset_history:
+            print(f"\n{'='*60}")
+            print(f"🔄 RESET TRIGGERED - NUCLEAR OPTION")
+            print(f"{'='*60}")
+            
+            # Step 1: Remove from global state entirely
+            if active_folder in NODE_STATE:
+                old_state = NODE_STATE[active_folder]
+                print(f"   📊 BEFORE RESET:")
+                print(f"      - seen_files: {len(old_state.get('seen_files', set()))} files")
+                print(f"      - queue: {len(old_state.get('queue', []))} jobs")
+                print(f"      - chat_history: {len(old_state.get('chat_history', []))} messages")
+                del NODE_STATE[active_folder]
+                print(f"   🗑️ Removed from memory (NODE_STATE)")
+            else:
+                print(f"   ℹ️ Not in memory (first run or already cleared)")
+            
+            # Step 2: Delete disk state file
+            if os.path.exists(state_file):
+                try:
+                    os.remove(state_file)
+                    print(f"   🗑️ Deleted disk state: {state_file}")
+                except Exception as e:
+                    print(f"   ⚠️ Could not delete disk state: {e}")
+            else:
+                print(f"   ℹ️ No disk state file to delete")
+            
+            # Step 3: Create completely fresh state
             NODE_STATE[active_folder] = {
                 "chat_history": [],
                 "seen_files": set(),
                 "queue": [],
                 "last_input": ""
             }
-        
-        state = NODE_STATE[active_folder]
-        
-        # Reset if requested
-        if reset_history:
-            print(f"\n{'='*60}")
-            print(f"🔄 RESET TRIGGERED")
-            print(f"{'='*60}")
-            print(f"   📂 Folder: {active_folder}")
-            print(f"   📊 BEFORE RESET:")
-            print(f"      - seen_files: {len(state.get('seen_files', set()))} files")
-            print(f"      - queue: {len(state.get('queue', []))} jobs")
-            print(f"      - chat_history: {len(state.get('chat_history', []))} messages")
             
-            state["chat_history"] = []
-            state["seen_files"] = set()
-            state["queue"] = []
-            state["last_input"] = ""
-            
-            # Also delete disk state so it doesn't get reloaded next time
-            state_file = os.path.join(active_folder, "presence_state.json")
-            if os.path.exists(state_file):
-                try:
-                    os.remove(state_file)
-                    print(f"   🗑️ Deleted: {state_file}")
-                except Exception as e:
-                    print(f"   ⚠️ Could not delete state file: {e}")
-            else:
-                print(f"   ℹ️ No state file to delete")
-            
+            print(f"   ✨ Created fresh state")
             print(f"   📊 AFTER RESET:")
-            print(f"      - seen_files: {len(state['seen_files'])} files (cleared)")
-            print(f"      - queue: {len(state['queue'])} jobs (cleared)")
-            print(f"      - chat_history: {len(state['chat_history'])} messages (cleared)")
+            print(f"      - seen_files: 0 files")
+            print(f"      - queue: 0 jobs")
+            print(f"      - chat_history: 0 messages")
             print(f"{'='*60}")
-            print(f"✅ Reset complete. All files will be treated as NEW.\n")
+            print(f"✅ RESET COMPLETE - All files will be treated as NEW\n")
+        
+        # =========================================================
+        # NORMAL INIT: Load or create state
+        # =========================================================
         else:
-            # Load persistent state from disk (ONLY if not just reset)
-            state_file = os.path.join(active_folder, "presence_state.json")
+            # Initialize if not exists
+            if active_folder not in NODE_STATE:
+                NODE_STATE[active_folder] = {
+                    "chat_history": [],
+                    "seen_files": set(),
+                    "queue": [],
+                    "last_input": ""
+                }
+                print(f"   ✨ Initialized new state for folder")
+            
+            # Load persistent state from disk
             if os.path.exists(state_file):
                 try:
                     with open(state_file, "r") as f:
                         disk_state = json.load(f)
-                        state["seen_files"] = set(disk_state.get("seen_files", []))
-                        state["queue"] = disk_state.get("queue", [])
-                        print(f"💾 Loaded state: {len(state['seen_files'])} seen files, {len(state['queue'])} queued jobs")
-                except:
-                    print("⚠️ Could not load state file")
+                        NODE_STATE[active_folder]["seen_files"] = set(disk_state.get("seen_files", []))
+                        NODE_STATE[active_folder]["queue"] = disk_state.get("queue", [])
+                        print(f"   💾 Loaded state: {len(NODE_STATE[active_folder]['seen_files'])} seen files, {len(NODE_STATE[active_folder]['queue'])} queued jobs")
+                except Exception as e:
+                    print(f"   ⚠️ Could not load state file: {e}")
+        
+        # Get current state reference
+        state = NODE_STATE[active_folder]
         
         # Mode decision
         if len(state["queue"]) > 0:
