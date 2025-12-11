@@ -73,7 +73,15 @@ class PresenceDirectorFireworks:
         
         # Reset if requested
         if reset_history:
-            print("🔄 Resetting history...")
+            print(f"\n{'='*60}")
+            print(f"🔄 RESET TRIGGERED")
+            print(f"{'='*60}")
+            print(f"   📂 Folder: {active_folder}")
+            print(f"   📊 BEFORE RESET:")
+            print(f"      - seen_files: {len(state.get('seen_files', set()))} files")
+            print(f"      - queue: {len(state.get('queue', []))} jobs")
+            print(f"      - chat_history: {len(state.get('chat_history', []))} messages")
+            
             state["chat_history"] = []
             state["seen_files"] = set()
             state["queue"] = []
@@ -84,23 +92,30 @@ class PresenceDirectorFireworks:
             if os.path.exists(state_file):
                 try:
                     os.remove(state_file)
-                    print("   🗑️ Deleted persistent state file.")
+                    print(f"   🗑️ Deleted: {state_file}")
                 except Exception as e:
                     print(f"   ⚠️ Could not delete state file: {e}")
+            else:
+                print(f"   ℹ️ No state file to delete")
             
-            print("✅ History cleared.")
-        
-        # Load persistent state from disk (ONLY if not just reset)
-        state_file = os.path.join(active_folder, "presence_state.json")
-        if not reset_history and os.path.exists(state_file):
-            try:
-                with open(state_file, "r") as f:
-                    disk_state = json.load(f)
-                    state["seen_files"] = set(disk_state.get("seen_files", []))
-                    state["queue"] = disk_state.get("queue", [])
-                    print(f"💾 Loaded state: {len(state['seen_files'])} seen files, {len(state['queue'])} queued jobs")
-            except:
-                print("⚠️ Could not load state file")
+            print(f"   📊 AFTER RESET:")
+            print(f"      - seen_files: {len(state['seen_files'])} files (cleared)")
+            print(f"      - queue: {len(state['queue'])} jobs (cleared)")
+            print(f"      - chat_history: {len(state['chat_history'])} messages (cleared)")
+            print(f"{'='*60}")
+            print(f"✅ Reset complete. All files will be treated as NEW.\n")
+        else:
+            # Load persistent state from disk (ONLY if not just reset)
+            state_file = os.path.join(active_folder, "presence_state.json")
+            if os.path.exists(state_file):
+                try:
+                    with open(state_file, "r") as f:
+                        disk_state = json.load(f)
+                        state["seen_files"] = set(disk_state.get("seen_files", []))
+                        state["queue"] = disk_state.get("queue", [])
+                        print(f"💾 Loaded state: {len(state['seen_files'])} seen files, {len(state['queue'])} queued jobs")
+                except:
+                    print("⚠️ Could not load state file")
         
         # Mode decision
         if len(state["queue"]) > 0:
@@ -122,11 +137,28 @@ class PresenceDirectorFireworks:
                         if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
             current_files = set(all_files)
             
+            # Detailed logging
+            print(f"   📂 Folder: {active_folder}")
+            print(f"   📁 Total images in folder: {len(current_files)}")
+            print(f"   👁️ Already seen: {len(state['seen_files'])} files")
+            
             # Find new files
             new_files = current_files - state["seen_files"]
             
-            if len(new_files) == 0 and user_input == state.get("last_input", ""):
-                print("   💤 No new files, no new input. Idle.")
+            print(f"   🆕 New files to process: {len(new_files)}")
+            if len(new_files) > 0:
+                for f in sorted(new_files):
+                    print(f"      → {f}")
+            
+            # Check for user input change
+            input_changed = user_input != state.get("last_input", "")
+            if user_input:
+                print(f"   💬 User input: \"{user_input[:50]}...\"" if len(user_input) > 50 else f"   💬 User input: \"{user_input}\"")
+                print(f"   🔄 Input changed: {input_changed}")
+            
+            if len(new_files) == 0 and not input_changed:
+                print(f"\n   💤 IDLE: No new files, no new input.")
+                print(f"      Tip: Toggle 'reset_history' to force re-analysis of all files.")
                 return ([], "", 1024, 1024, 1, "IDLE", "")
             
             # Build file manifest
@@ -198,7 +230,7 @@ class PresenceDirectorFireworks:
             
             payload = {
                 "model": "accounts/fireworks/models/qwen3-vl-235b-a22b-thinking",
-                "max_tokens": 16384,  # INCREASED - model needs room to think AND output JSON
+                "max_tokens": 150000,  # Very high - model can think as long as needed
                 "temperature": 0.6,
                 "messages": messages
             }
