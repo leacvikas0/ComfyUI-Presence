@@ -251,7 +251,7 @@ class PresenceDirectorFireworks:
             
             payload = {
                 "model": "accounts/fireworks/models/qwen3-vl-235b-a22b-thinking",
-                "max_tokens": 65536,  # 64K - model supports 256K context
+                "max_tokens": 4096,  # Max for non-streaming (streaming requires refactor)
                 "temperature": 0.6,
                 "messages": messages
             }
