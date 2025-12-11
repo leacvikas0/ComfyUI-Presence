@@ -198,7 +198,7 @@ class PresenceDirectorFireworks:
             
             payload = {
                 "model": "accounts/fireworks/models/qwen3-vl-235b-a22b-thinking",
-                "max_tokens": 4096,
+                "max_tokens": 16384,  # INCREASED - model needs room to think AND output JSON
                 "temperature": 0.6,
                 "messages": messages
             }
@@ -241,7 +241,17 @@ class PresenceDirectorFireworks:
             # Extract response
             response_text = result["choices"][0]["message"]["content"]
             
-            # Parse </think> tag if present (Qwen3-VL thinking model)
+            # Diagnostic: Show raw response info
+            print(f"\n   📥 RAW RESPONSE RECEIVED:")
+            print(f"      Length: {len(response_text)} chars")
+            print(f"      Contains <think>: {'<think>' in response_text}")
+            print(f"      Contains </think>: {'</think>' in response_text}")
+            print(f"      Starts with {{: {response_text.strip().startswith('{')}")
+            
+            # Check if response was truncated (hit max_tokens)
+            if "usage" in result:
+                if result["usage"].get("completion_tokens", 0) >= 16380:
+                    print(f"      ⚠️ WARNING: Output hit token limit! Response may be truncated.")
             if "</think>" in response_text:
                 thinking_part, final_answer = response_text.split("</think>", 1)
                 
@@ -254,9 +264,20 @@ class PresenceDirectorFireworks:
                 print(f"{'='*80}")
                 # Show FULL thinking output
                 print(thinking_part.strip())
-                print(f"{'='*80}\n")
+                print(f"{'='*80}")
                 
                 response_text = final_answer.strip()
+                
+                print(f"\n   📤 EXTRACTED JSON RESPONSE:")
+                print(f"      Length: {len(response_text)} chars")
+                print(f"      Starts with {{: {response_text.strip().startswith('{')}")
+            else:
+                print(f"\n   ⚠️ NO </think> TAG FOUND IN RESPONSE!")
+                print(f"      Possible causes:")
+                print(f"      1. Response hit token limit while AI was still thinking")
+                print(f"      2. Model didn't use thinking mode")
+                print(f"      3. Response was truncated")
+                print(f"      Raw response will be treated as final answer.")
             
             print(f"\n{'='*80}")
             print(f"📋 FINAL JSON RESPONSE:")
