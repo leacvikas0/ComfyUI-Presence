@@ -209,34 +209,67 @@ class PresenceDirectorFireworks:
             }
             
             print(f"   🔥 Calling Fireworks AI (Qwen3-VL)...")
+            print(f"      Model: {payload['model']}")
+            print(f"      Max tokens: {payload['max_tokens']}")
             
             response = requests.post(
                 "https://api.fireworks.ai/inference/v1/chat/completions",
                 headers=headers,
                 json=payload,
-                timeout=120
+                timeout=180  # Increased timeout for large responses
             )
             
             response.raise_for_status()
             result = response.json()
             
+            # Log token usage
+            if "usage" in result:
+                usage = result["usage"]
+                input_tokens = usage.get("prompt_tokens", 0)
+                output_tokens = usage.get("completion_tokens", 0)
+                total_tokens = usage.get("total_tokens", 0)
+                
+                # Cost calculation (Qwen3-VL pricing)
+                cost = (input_tokens * 0.22 / 1_000_000) + (output_tokens * 0.88 / 1_000_000)
+                
+                print(f"\n   📊 TOKEN USAGE:")
+                print(f"      Input:  {input_tokens:,} tokens")
+                print(f"      Output: {output_tokens:,} tokens")
+                print(f"      Total:  {total_tokens:,} tokens")
+                print(f"      Cost:   ${cost:.4f}")
+            
             # Extract response
             response_text = result["choices"][0]["message"]["content"]
             
-            # Parse </think> tag if present
+            # Parse </think> tag if present (Qwen3-VL thinking model)
             if "</think>" in response_text:
                 thinking_part, final_answer = response_text.split("</think>", 1)
+                
+                # Clean up thinking part (remove <think> tag if present)
+                if "<think>" in thinking_part:
+                    thinking_part = thinking_part.split("<think>", 1)[1]
+                
                 print(f"\n{'='*80}")
-                print(f"🧠 QWEN THINKING:")
+                print(f"🧠 AI THINKING PROCESS (truncated):")
                 print(f"{'='*80}")
-                print(thinking_part)
+                # Only show first 500 chars of thinking to avoid log spam
+                thinking_preview = thinking_part.strip()[:500]
+                print(thinking_preview)
+                if len(thinking_part) > 500:
+                    print(f"... ({len(thinking_part) - 500} more chars)")
                 print(f"{'='*80}\n")
+                
                 response_text = final_answer.strip()
             
             print(f"\n{'='*80}")
-            print(f"📋 FINAL RESPONSE:")
+            print(f"📋 FINAL JSON RESPONSE:")
             print(f"{'='*80}")
-            print(response_text)
+            # Limit display to prevent log spam
+            if len(response_text) > 2000:
+                print(response_text[:2000])
+                print(f"... ({len(response_text) - 2000} more chars)")
+            else:
+                print(response_text)
             print(f"{'='*80}\n")
             
             # Update chat history
@@ -469,25 +502,147 @@ class PresenceDirectorFireworks:
         return colors.get(color_name.lower(), (255, 255, 255))
 
     def _parse_json(self, text):
-        """Extract and parse JSON from response"""
+        """Extract and parse JSON from response with detailed logging"""
+        
+        print(f"\n{'─'*60}")
+        print(f"🔍 PARSING JSON...")
+        print(f"{'─'*60}")
+        
+        # Check if response is empty
+        if not text or text.strip() == "":
+            print(f"   ❌ ERROR: Response is empty!")
+            return {}
+        
+        # Show response length and preview
+        print(f"   📏 Response length: {len(text)} characters")
+        preview = text[:200].replace('\n', ' ')
+        print(f"   📝 Preview: {preview}...")
+        
+        # Method 1: Try direct JSON parse
+        print(f"\n   🔧 Method 1: Direct JSON parse...")
         try:
-            # Try direct parse
-            return json.loads(text)
-        except:
-            # Try to extract from markdown
-            if "```json" in text:
+            data = json.loads(text)
+            print(f"   ✅ SUCCESS! Parsed JSON with {len(data)} keys: {list(data.keys())}")
+            self._validate_json_structure(data)
+            return data
+        except json.JSONDecodeError as e:
+            print(f"   ⚠️ Failed: {e.msg} at position {e.pos}")
+        
+        # Method 2: Try to extract from ```json block
+        print(f"\n   🔧 Method 2: Extract from ```json block...")
+        if "```json" in text:
+            try:
                 start = text.find("```json") + 7
                 end = text.find("```", start)
-                json_text = text[start:end].strip()
-                return json.loads(json_text)
-            elif "```" in text:
+                if end > start:
+                    json_text = text[start:end].strip()
+                    print(f"   📦 Found JSON block: {len(json_text)} chars")
+                    data = json.loads(json_text)
+                    print(f"   ✅ SUCCESS! Parsed JSON with {len(data)} keys: {list(data.keys())}")
+                    self._validate_json_structure(data)
+                    return data
+            except json.JSONDecodeError as e:
+                print(f"   ⚠️ Failed: {e.msg}")
+        else:
+            print(f"   ⚠️ No ```json block found")
+        
+        # Method 3: Try generic code block
+        print(f"\n   🔧 Method 3: Extract from generic ``` block...")
+        if "```" in text:
+            try:
                 start = text.find("```") + 3
+                # Skip language identifier if present
+                newline = text.find("\n", start)
+                if newline > start and newline - start < 20:
+                    start = newline + 1
                 end = text.find("```", start)
-                json_text = text[start:end].strip()
-                return json.loads(json_text)
-            else:
-                print("⚠️ Could not parse JSON from response")
-                return {}
+                if end > start:
+                    json_text = text[start:end].strip()
+                    print(f"   📦 Found code block: {len(json_text)} chars")
+                    data = json.loads(json_text)
+                    print(f"   ✅ SUCCESS! Parsed JSON with {len(data)} keys: {list(data.keys())}")
+                    self._validate_json_structure(data)
+                    return data
+            except json.JSONDecodeError as e:
+                print(f"   ⚠️ Failed: {e.msg}")
+        else:
+            print(f"   ⚠️ No code block found")
+        
+        # Method 4: Try to find JSON object in text
+        print(f"\n   🔧 Method 4: Search for JSON object {{...}}...")
+        brace_start = text.find("{")
+        if brace_start != -1:
+            # Find matching closing brace
+            depth = 0
+            for i, char in enumerate(text[brace_start:]):
+                if char == "{":
+                    depth += 1
+                elif char == "}":
+                    depth -= 1
+                    if depth == 0:
+                        json_text = text[brace_start:brace_start + i + 1]
+                        try:
+                            print(f"   📦 Found object: {len(json_text)} chars")
+                            data = json.loads(json_text)
+                            print(f"   ✅ SUCCESS! Parsed JSON with {len(data)} keys: {list(data.keys())}")
+                            self._validate_json_structure(data)
+                            return data
+                        except json.JSONDecodeError as e:
+                            print(f"   ⚠️ Failed: {e.msg}")
+                        break
+        else:
+            print(f"   ⚠️ No {{ found in response")
+        
+        # All methods failed
+        print(f"\n{'='*60}")
+        print(f"❌ JSON PARSE FAILED - ALL METHODS EXHAUSTED")
+        print(f"{'='*60}")
+        print(f"📄 FULL RESPONSE (first 1000 chars):")
+        print(f"{'─'*60}")
+        print(text[:1000])
+        print(f"{'─'*60}")
+        print(f"\n💡 POSSIBLE CAUSES:")
+        print(f"   1. AI rambled without producing JSON")
+        print(f"   2. Response got cut off (check max_tokens)")
+        print(f"   3. AI misunderstood the task")
+        print(f"\n💡 SUGGESTED FIX:")
+        print(f"   - Check your system prompt")
+        print(f"   - Make sure it clearly asks for JSON output")
+        print(f"   - Try resetting history and running again")
+        print(f"{'='*60}\n")
+        
+        return {}
+    
+    def _validate_json_structure(self, data):
+        """Validate and report JSON structure"""
+        print(f"\n   📋 JSON STRUCTURE VALIDATION:")
+        
+        # Check for required fields
+        if "thought" in data:
+            thought_preview = data["thought"][:80].replace('\n', ' ') if data["thought"] else "(empty)"
+            print(f"   ✓ thought: \"{thought_preview}...\"")
+        else:
+            print(f"   ⚠️ thought: MISSING (optional but recommended)")
+        
+        if "status" in data:
+            print(f"   ✓ status: {data['status']}")
+        else:
+            print(f"   ⚠️ status: MISSING (will default to WORKING)")
+        
+        if "queue" in data:
+            print(f"   ✓ queue: {len(data['queue'])} jobs")
+            for i, job in enumerate(data["queue"]):
+                load_count = len(job.get("load", []))
+                prompt_preview = job.get("prompt", "")[:50]
+                print(f"      Job {i+1}: {load_count} images, prompt=\"{prompt_preview}...\"")
+        else:
+            print(f"   ⚠️ queue: MISSING (no generation jobs)")
+        
+        if "ops" in data:
+            print(f"   ✓ ops: {len(data['ops'])} file operations")
+        
+        if "refresh_context" in data:
+            print(f"   ✓ refresh_context: {data['refresh_context']}")
 
     def _handle_file_op(self, folder, op):
         """Execute a file operation"""
