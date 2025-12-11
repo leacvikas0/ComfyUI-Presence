@@ -490,6 +490,14 @@ class PresenceDirectorFireworks:
         logger.section("🤖 ROBOT MODE: EXECUTING JOB")
         logger.job_details(job)
         
+        # DEBUG: Show explicitly parsed values
+        logger.log(f"\n   🔍 PARSED VALUES FROM JOB:")
+        logger.log(f"      w = {w} (from job.get('w', 1024))")
+        logger.log(f"      h = {h} (from job.get('h', 1024))")
+        logger.log(f"      batch = {batch}")
+        logger.log(f"      mp = {mp}")
+        logger.log(f"      Raw job dict: {json.dumps(job, indent=2)[:500]}...")
+        
         bundle = []
         logger.log(f"\n   📦 Loading images for Flux...")
         
