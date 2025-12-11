@@ -208,6 +208,13 @@ class PresenceDirectorFireworks:
             print(f"\n🤖 ROBOT MODE: {len(state['queue'])} jobs in queue...")
             print(f"   ⚡ Executing first job...")
             job = state["queue"].pop(0)
+            
+            # DEBUG: Show job immediately after popping
+            print(f"   📋 JOB FROM QUEUE:")
+            print(f"      w = {job.get('w', 'NOT FOUND (default 1024)')}")
+            print(f"      h = {job.get('h', 'NOT FOUND (default 1024)')}")
+            print(f"      output_name = {job.get('output_name', 'gen')}")
+            
             self._save_state(active_folder, state)
             return self._execute_job(active_folder, job)
         else:
