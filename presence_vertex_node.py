@@ -55,58 +55,97 @@ class PresenceDirectorVertex:
         print(f"\n{'='*80}")
         print(f"🏭 PRESENCE DIRECTOR (Vertex AI - Gemini 3 Pro)")
         print(f"{'='*80}")
+        print(f"   📂 Active folder: {active_folder}")
+        print(f"   🔄 Reset requested: {reset_history}")
         
         # Ensure folder exists
         if not os.path.exists(active_folder):
             os.makedirs(active_folder, exist_ok=True)
-            print(f"📁 Created folder: {active_folder}")
+            print(f"   📁 Created folder: {active_folder}")
         
-        # Initialize state for this folder
         global NODE_STATE
-        if active_folder not in NODE_STATE:
+        state_file = os.path.join(active_folder, "presence_state.json")
+        
+        # =========================================================
+        # ROBUST RESET: Complete nuclear option
+        # =========================================================
+        if reset_history:
+            print(f"\n{'='*60}")
+            print(f"🔄 RESET TRIGGERED - NUCLEAR OPTION")
+            print(f"{'='*60}")
+            
+            # Step 1: Remove from global state entirely
+            if active_folder in NODE_STATE:
+                old_state = NODE_STATE[active_folder]
+                print(f"   📊 BEFORE RESET:")
+                print(f"      - seen_files: {len(old_state.get('seen_files', set()))} files")
+                print(f"      - queue: {len(old_state.get('queue', []))} jobs")
+                print(f"      - chat: {'Active' if old_state.get('chat') else 'None'}")
+                del NODE_STATE[active_folder]
+                print(f"   🗑️ Removed from memory (NODE_STATE)")
+            else:
+                print(f"   ℹ️ Not in memory (first run or already cleared)")
+            
+            # Step 2: Delete disk state file
+            if os.path.exists(state_file):
+                try:
+                    os.remove(state_file)
+                    print(f"   🗑️ Deleted disk state: {state_file}")
+                except Exception as e:
+                    print(f"   ⚠️ Could not delete disk state: {e}")
+            else:
+                print(f"   ℹ️ No disk state file to delete")
+            
+            # Step 3: Create completely fresh state
             NODE_STATE[active_folder] = {
                 "chat": None,
                 "seen_files": set(),
                 "queue": [],
                 "last_input": ""
             }
-        
-        state = NODE_STATE[active_folder]
-        
-        # Handle reset
-        if reset_history:
-            print("🔄 RESET TRIGGERED. Clearing history...")
-            state["chat"] = None
-            state["seen_files"] = set()
-            state["queue"] = []
-            state["last_input"] = ""
             
-            # Also delete disk state so it doesn't get reloaded
-            state_file = os.path.join(active_folder, "presence_state.json")
+            print(f"   ✨ Created fresh state")
+            print(f"   📊 AFTER RESET:")
+            print(f"      - seen_files: 0 files")
+            print(f"      - queue: 0 jobs")
+            print(f"      - chat: None")
+            print(f"{'='*60}")
+            print(f"✅ RESET COMPLETE - All files will be treated as NEW\n")
+        
+        # =========================================================
+        # NORMAL INIT: Load or create state
+        # =========================================================
+        else:
+            # Initialize if not exists
+            if active_folder not in NODE_STATE:
+                NODE_STATE[active_folder] = {
+                    "chat": None,
+                    "seen_files": set(),
+                    "queue": [],
+                    "last_input": ""
+                }
+                print(f"   ✨ Initialized new state for folder")
+            
+            # Load persistent state from disk
             if os.path.exists(state_file):
                 try:
-                    os.remove(state_file)
-                    print("   🗑️ Deleted persistent state file.")
+                    with open(state_file, "r") as f:
+                        disk_state = json.load(f)
+                        NODE_STATE[active_folder]["seen_files"] = set(disk_state.get("seen_files", []))
+                        NODE_STATE[active_folder]["queue"] = disk_state.get("queue", [])
+                        print(f"   💾 Loaded state: {len(NODE_STATE[active_folder]['seen_files'])} seen files, {len(NODE_STATE[active_folder]['queue'])} queued jobs")
                 except Exception as e:
-                    print(f"   ⚠️ Could not delete state file: {e}")
+                    print(f"   ⚠️ Could not load state file: {e}")
         
-        # Load persistent state from disk
-        state_file = os.path.join(active_folder, "presence_state.json")
-        if os.path.exists(state_file) and not reset_history:
-            try:
-                with open(state_file, "r") as f:
-                    disk_state = json.load(f)
-                    state["seen_files"] = set(disk_state.get("seen_files", []))
-                    state["queue"] = disk_state.get("queue", [])
-                    print(f"📂 Loaded state: {len(state['seen_files'])} seen files, {len(state['queue'])} queued jobs")
-            except Exception as e:
-                print(f"⚠️ Could not load state: {e}")
+        # Get current state reference
+        state = NODE_STATE[active_folder]
         
         # =================================================================================================
         # 🤖 MODE A: THE ROBOT (EXECUTOR)
         # =================================================================================================
         if len(state["queue"]) > 0:
-            print(f"🤖 ROBOT MODE: Executing job 1 of {len(state['queue'])}...")
+            print(f"\n🤖 ROBOT MODE: {len(state['queue'])} jobs in queue...")
+            print(f"   ⚡ Executing first job...")
             job = state["queue"].pop(0)
             
             # Save state after popping job
@@ -117,11 +156,21 @@ class PresenceDirectorVertex:
         # =================================================================================================
         # 🧠 MODE B: THE BRAIN (ITERATOR)
         # =================================================================================================
-        print("🧠 BRAIN MODE: Scanning folder...")
+        print(f"\n🧠 BRAIN MODE: Analyzing folder state...")
         
         # 1. SCAN & FILTER
         current_files = set(f for f in os.listdir(active_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')))
         new_files = list(current_files - state["seen_files"])
+        
+        # Detailed logging
+        print(f"   📂 Folder: {active_folder}")
+        print(f"   📁 Total images in folder: {len(current_files)}")
+        print(f"   👁️ Already seen: {len(state['seen_files'])} files")
+        print(f"   🆕 New files to process: {len(new_files)}")
+        if len(new_files) > 0:
+            for f in sorted(new_files):
+                print(f"      → {f}")
+        
         state["seen_files"].update(new_files)
         
         # 2. PREPARE PAYLOAD
