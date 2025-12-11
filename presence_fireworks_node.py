@@ -78,11 +78,21 @@ class PresenceDirectorFireworks:
             state["seen_files"] = set()
             state["queue"] = []
             state["last_input"] = ""
+            
+            # Also delete disk state so it doesn't get reloaded next time
+            state_file = os.path.join(active_folder, "presence_state.json")
+            if os.path.exists(state_file):
+                try:
+                    os.remove(state_file)
+                    print("   🗑️ Deleted persistent state file.")
+                except Exception as e:
+                    print(f"   ⚠️ Could not delete state file: {e}")
+            
             print("✅ History cleared.")
         
-        # Load persistent state from disk
+        # Load persistent state from disk (ONLY if not just reset)
         state_file = os.path.join(active_folder, "presence_state.json")
-        if os.path.exists(state_file):
+        if not reset_history and os.path.exists(state_file):
             try:
                 with open(state_file, "r") as f:
                     disk_state = json.load(f)

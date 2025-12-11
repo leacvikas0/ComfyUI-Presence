@@ -80,6 +80,15 @@ class PresenceDirectorVertex:
             state["seen_files"] = set()
             state["queue"] = []
             state["last_input"] = ""
+            
+            # Also delete disk state so it doesn't get reloaded
+            state_file = os.path.join(active_folder, "presence_state.json")
+            if os.path.exists(state_file):
+                try:
+                    os.remove(state_file)
+                    print("   🗑️ Deleted persistent state file.")
+                except Exception as e:
+                    print(f"   ⚠️ Could not delete state file: {e}")
         
         # Load persistent state from disk
         state_file = os.path.join(active_folder, "presence_state.json")
