@@ -262,17 +262,50 @@ class PresenceDirectorFireworks:
             for f in sorted_files:
                 file_list_text += f"- {f}\n"
             
+            
             upload_images = []
             
-            # Send ORIGINAL resolution to Qwen (cheap, no resizing)
-            print(f"   - Found {len(new_files)} new images to upload (ORIGINAL resolution).")
+            # Resize images to ~2MP max (Full HD) for AI analysis - saves tokens!
+            print(f"   - Processing {len(new_files)} new images for AI analysis...")
             for f in new_files:
                 path = os.path.join(active_folder, f)
                 try:
                     img = Image.open(path)
                     img = ImageOps.exif_transpose(img)
-                    print(f"   📤 Uploading {f}: {img.width}x{img.height} (original)")
-                    upload_images.append((f, img))
+                    
+                    # Calculate current megapixels
+                    current_mp = (img.width * img.height) / (1024 * 1024)
+                    
+                    # If image is >2MP, resize it to ~2MP and save
+                    if current_mp > 2.0:
+                        # Calculate scale to get ~2MP
+                        target_mp = 2.0
+                        scale_factor = (target_mp / current_mp) ** 0.5
+                        new_width = int(img.width * scale_factor)
+                        new_height = int(img.height * scale_factor)
+                        
+                        # Resize
+                        img_resized = img.resize((new_width, new_height), Image.LANCZOS)
+                        
+                        # Save resized version with prefix
+                        analyzed_filename = f"analyzed_{f}"
+                        analyzed_path = os.path.join(active_folder, analyzed_filename)
+                        
+                        # Only save if it doesn't exist yet
+                        if not os.path.exists(analyzed_path):
+                            img_resized.save(analyzed_path, quality=90)
+                            print(f"   🔽 Resized {f}: {img.width}x{img.height} ({current_mp:.1f}MP) → {new_width}x{new_height} ({target_mp:.1f}MP)")
+                            print(f"      Saved as: {analyzed_filename}")
+                        else:
+                            print(f"   ✓ Using existing: {analyzed_filename}")
+                        
+                        # Upload the resized version
+                        upload_images.append((analyzed_filename, img_resized))
+                    else:
+                        # Image is already ≤2MP, use as-is
+                        print(f"   ✓ {f}: {img.width}x{img.height} ({current_mp:.1f}MP) - good for analysis")
+                        upload_images.append((f, img))
+                        
                 except Exception as e:
                     print(f"   ❌ Error reading {f}: {e}")
             
