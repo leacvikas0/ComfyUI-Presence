@@ -100,6 +100,7 @@ class PresenceDirectorFireworks:
                 "api_key": ("STRING", {"default": "fw_..."}),
                 "system_prompt": ("STRING", {"multiline": True, "default": "PASTE SYSTEM PROMPT HERE"}),
                 "user_input": ("STRING", {"multiline": True, "default": "", "placeholder": "Type intervention here (sent once)..."}),
+                "thinking_budget": (["8K (Fast)", "16K (Optimal)", "32K (Deep)"], {"default": "16K (Optimal)"}),
                 "reset_history": ("BOOLEAN", {"default": False, "label_on": "RESET ON NEXT RUN", "label_off": "Keep History"}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
             }
@@ -110,7 +111,8 @@ class PresenceDirectorFireworks:
     FUNCTION = "run_director"
     CATEGORY = "PresenceAI"
 
-    def run_director(self, active_folder, api_key, system_prompt, user_input, reset_history, seed):
+
+    def run_director(self, active_folder, api_key, system_prompt, user_input, thinking_budget, reset_history, seed):
         """Main execution - switches between Brain and Robot modes"""
         
         # Ensure folder exists first
@@ -321,13 +323,23 @@ class PresenceDirectorFireworks:
                     {"role": "system", "content": system_prompt}
                 ] + messages
             
+            # Map thinking budget to actual token values
+            budget_map = {
+                "8K (Fast)": 8192,
+                "16K (Optimal)": 16384,
+                "32K (Deep)": 32768
+            }
+            max_tokens = budget_map.get(thinking_budget, 16384)  # Default to 16K if not found
+            
             payload = {
                 "model": "accounts/fireworks/models/qwen3-vl-235b-a22b-thinking",
-                "max_tokens": 16384,  # Optimal for complex reasoning (diminishing returns beyond this)
+                "max_tokens": max_tokens,
                 "temperature": 0.6,
                 "stream": True,  # STREAMING ENABLED
                 "messages": messages
             }
+            
+            print(f"   🧠 Thinking budget: {thinking_budget} ({max_tokens} tokens)")
             
             headers = {
                 "Authorization": f"Bearer {api_key}",
