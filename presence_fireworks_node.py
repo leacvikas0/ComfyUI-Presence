@@ -425,22 +425,24 @@ class PresenceDirectorFireworks:
                                     response_text += content
                                     token_count += 1
                                     
-                                    # Detect if we're in thinking section
-                                    if "<think>" in response_text and not in_thinking:
+                                    # Check if this chunk contains <think> tag
+                                    if "<think>" in content and not in_thinking:
                                         in_thinking = True
                                         thinking_shown = True
+                                        # Remove everything before and including <think>
+                                        content = content.split("<think>", 1)[1] if "<think>" in content else content
+                                    
+                                    # Check if this chunk contains </think> tag
+                                    if "</think>" in content and in_thinking:
+                                        in_thinking = False
+                                        # Only print up to </think>
+                                        content = content.split("</think>", 1)[0]
+                                        print(content, end="", flush=True)
+                                        continue  # Don't process further
                                     
                                     # Display thinking content in real-time
-                                    if in_thinking and "</think>" not in response_text:
-                                        # Print thinking tokens as they arrive
+                                    if in_thinking:
                                         print(content, end="", flush=True)
-                                    elif "</think>" in content:
-                                        # We hit the end of thinking
-                                        in_thinking = False
-                                        # Print up to the </think> tag
-                                        think_end = content.find("</think>")
-                                        if think_end > 0:
-                                            print(content[:think_end], end="", flush=True)
                         except json.JSONDecodeError:
                             pass
             
