@@ -353,11 +353,15 @@ class PresenceDirectorFireworks:
                 print(f"      {response.text[:500]}")
                 response.raise_for_status()
             
-            # Accumulate streaming response
+            # Accumulate streaming response and display thinking in real-time
             response_text = ""
             token_count = 0
-            print(f"\n   📡 STREAMING RESPONSE:")
-            print(f"      ", end="", flush=True)
+            in_thinking = False
+            thinking_shown = False
+            
+            print(f"\n{'='*80}")
+            print(f"🧠 AI THINKING (live stream):")
+            print(f"{'='*80}")
             
             for line in response.iter_lines():
                 if line:
@@ -374,13 +378,29 @@ class PresenceDirectorFireworks:
                                 if content:
                                     response_text += content
                                     token_count += 1
-                                    # Show progress every 100 tokens
-                                    if token_count % 100 == 0:
-                                        print(f"█", end="", flush=True)
+                                    
+                                    # Detect if we're in thinking section
+                                    if "<think>" in response_text and not in_thinking:
+                                        in_thinking = True
+                                        thinking_shown = True
+                                    
+                                    # Display thinking content in real-time
+                                    if in_thinking and "</think>" not in response_text:
+                                        # Print thinking tokens as they arrive
+                                        print(content, end="", flush=True)
+                                    elif "</think>" in content:
+                                        # We hit the end of thinking
+                                        in_thinking = False
+                                        # Print up to the </think> tag
+                                        think_end = content.find("</think>")
+                                        if think_end > 0:
+                                            print(content[:think_end], end="", flush=True)
                         except json.JSONDecodeError:
                             pass
             
-            print(f" ({token_count} chunks)")
+            print(f"\n{'='*80}")
+            print(f"✅ Thinking complete ({token_count} chunks)")
+            print(f"{'='*80}\n")
             
             # Log approximate usage
             print(f"\n   📊 STREAMING COMPLETE:")
