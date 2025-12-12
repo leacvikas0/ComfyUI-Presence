@@ -227,10 +227,9 @@ class PresenceDirectorFireworks:
         """Brain Mode: Analyze new files and plan next actions"""
         
         try:
-            # Scan for all image files (but exclude our internal analyzed_* files)
+            # Scan for all image files
             all_files = [f for f in os.listdir(active_folder) 
-                        if f.lower().endswith(('.png', '.jpg', '.jpeg'))
-                        and not f.startswith('analyzed_')]  # Skip internal resized versions
+                        if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
             current_files = set(all_files)
             
             # Detailed logging
@@ -277,7 +276,7 @@ class PresenceDirectorFireworks:
                     # Calculate current megapixels
                     current_mp = (img.width * img.height) / (1024 * 1024)
                     
-                    # If image is >2MP, resize it to ~2MP and save
+                    # If image is >2MP, resize it to ~2MP and REPLACE original
                     if current_mp > 2.0:
                         # Calculate scale to get ~2MP
                         target_mp = 2.0
@@ -288,23 +287,22 @@ class PresenceDirectorFireworks:
                         # Resize
                         img_resized = img.resize((new_width, new_height), Image.LANCZOS)
                         
-                        # Save resized version with prefix
-                        analyzed_filename = f"analyzed_{f}"
-                        analyzed_path = os.path.join(active_folder, analyzed_filename)
+                        # Save resized version REPLACING the original (Flux doesn't need >2MP)
+                        print(f"   🔽 Resizing {f}: {img.width}x{img.height} ({current_mp:.1f}MP) → {new_width}x{new_height} ({target_mp:.1f}MP)")
                         
-                        # Only save if it doesn't exist yet
-                        if not os.path.exists(analyzed_path):
-                            img_resized.save(analyzed_path, quality=90)
-                            print(f"   🔽 Resized {f}: {img.width}x{img.height} ({current_mp:.1f}MP) → {new_width}x{new_height} ({target_mp:.1f}MP)")
-                            print(f"      Saved as: {analyzed_filename}")
-                        else:
-                            print(f"   ✓ Using existing: {analyzed_filename}")
+                        # Close original file before deleting
+                        img.close()
+                        
+                        # Delete original and save resized in its place
+                        os.remove(path)
+                        img_resized.save(path, quality=90)
+                        print(f"      ✅ Replaced original with 2MP version")
                         
                         # Upload the resized version
-                        upload_images.append((analyzed_filename, img_resized))
+                        upload_images.append((f, img_resized))
                     else:
                         # Image is already ≤2MP, use as-is
-                        print(f"   ✓ {f}: {img.width}x{img.height} ({current_mp:.1f}MP) - good for analysis")
+                        print(f"   ✓ {f}: {img.width}x{img.height} ({current_mp:.1f}MP) - good")
                         upload_images.append((f, img))
                         
                 except Exception as e:
@@ -553,8 +551,8 @@ class PresenceDirectorFireworks:
         logger = ProjectLogger(folder)
         
         prompt = job.get("prompt", "")
-        w = job.get("w", 1024)
-        h = job.get("h", 1024)
+        w = job.get("w", 1920)
+        h = job.get("h", 1080)
         batch = job.get("batch", 1)
         output_name = job.get("output_name", "gen")
         load_list = job.get("load", [])
@@ -567,8 +565,8 @@ class PresenceDirectorFireworks:
         
         # DEBUG: Show explicitly parsed values
         logger.log(f"\n   🔍 PARSED VALUES FROM JOB:")
-        logger.log(f"      w = {w} (from job.get('w', 1024))")
-        logger.log(f"      h = {h} (from job.get('h', 1024))")
+        logger.log(f"      w = {w} (from job.get('w', 1920))")
+        logger.log(f"      h = {h} (from job.get('h', 1080))")
         logger.log(f"      batch = {batch}")
         logger.log(f"      mp = {mp}")
         logger.log(f"      Raw job dict: {json.dumps(job, indent=2)[:500]}...")
