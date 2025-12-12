@@ -323,7 +323,7 @@ class PresenceDirectorFireworks:
             
             payload = {
                 "model": "accounts/fireworks/models/qwen3-vl-235b-a22b-thinking",
-                "max_tokens": 32768,  # Can go high with streaming!
+                "max_tokens": 16384,  # Optimal for complex reasoning (diminishing returns beyond this)
                 "temperature": 0.6,
                 "stream": True,  # STREAMING ENABLED
                 "messages": messages
