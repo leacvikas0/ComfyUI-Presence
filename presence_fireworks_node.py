@@ -227,9 +227,10 @@ class PresenceDirectorFireworks:
         """Brain Mode: Analyze new files and plan next actions"""
         
         try:
-            # Scan for all image files
+            # Scan for all image files (but exclude our internal analyzed_* files)
             all_files = [f for f in os.listdir(active_folder) 
-                        if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+                        if f.lower().endswith(('.png', '.jpg', '.jpeg'))
+                        and not f.startswith('analyzed_')]  # Skip internal resized versions
             current_files = set(all_files)
             
             # Detailed logging
