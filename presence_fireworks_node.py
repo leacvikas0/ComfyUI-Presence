@@ -221,9 +221,9 @@ class PresenceDirectorFireworks:
             return self._execute_job(active_folder, job)
         else:
             print(f"\n🧠 BRAIN MODE: Analyzing folder state...")
-            return self._brain_mode(active_folder, state, api_key, system_prompt, user_input)
+            return self._brain_mode(active_folder, state, api_key, system_prompt, user_input, thinking_budget)
 
-    def _brain_mode(self, active_folder, state, api_key, system_prompt, user_input):
+    def _brain_mode(self, active_folder, state, api_key, system_prompt, user_input, thinking_budget):
         """Brain Mode: Analyze new files and plan next actions"""
         
         try:
