@@ -477,9 +477,8 @@ Analyze and respond with your JSON plan.
             }, f, indent=2)
 
     def _empty_output(self):
-        """Return empty output when nothing to do"""
-        empty = torch.zeros((1, 64, 64, 3))
-        return (empty, "", 1920, 1080, "")
+        """Raise error when nothing to do - stops the workflow"""
+        raise RuntimeError("[Director] IDLE - No jobs in queue. Add new files or input to continue.")
 
 
 # Register
