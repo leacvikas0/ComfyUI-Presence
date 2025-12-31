@@ -146,14 +146,74 @@ class PresenceSaver:
             
         return {"ui": {"images": results}}
 
+class PresencePreview:
+    """
+    Preview node to see what images are being sent from the Director.
+    Shows the image in ComfyUI's preview panel.
+    """
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+            },
+            "optional": {
+                "prompt": ("STRING", {"forceInput": True, "default": ""}),
+                "filename": ("STRING", {"forceInput": True, "default": ""}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("images",)
+    FUNCTION = "preview"
+    OUTPUT_NODE = True
+    CATEGORY = "PresenceAI"
+
+    def preview(self, images, prompt="", filename=""):
+        import folder_paths
+        
+        print(f"\n[PREVIEW] Showing {len(images)} images")
+        print(f"   Prompt: {prompt[:80]}..." if len(prompt) > 80 else f"   Prompt: {prompt}")
+        print(f"   Filename: {filename}")
+        
+        results = []
+        for i, tensor in enumerate(images):
+            # Get dimensions
+            if len(tensor.shape) == 3:
+                H, W, C = tensor.shape
+            else:
+                H, W, C = tensor.shape[1], tensor.shape[2], tensor.shape[3]
+            
+            print(f"   Image {i+1}: {W}x{H}")
+            
+            # Save to temp for preview
+            array = 255. * tensor.cpu().numpy()
+            img = Image.fromarray(np.clip(array, 0, 255).astype(np.uint8))
+            
+            temp_dir = folder_paths.get_temp_directory()
+            fname = f"preview_{i}.png"
+            temp_path = os.path.join(temp_dir, fname)
+            img.save(temp_path, compress_level=4)
+            
+            results.append({
+                "filename": fname,
+                "subfolder": "",
+                "type": "temp"
+            })
+        
+        return {"ui": {"images": results}, "result": (images,)}
+
 
 # Register nodes
 NODE_CLASS_MAPPINGS = {
     "FluxAdaptiveInjector": FluxAdaptiveInjector,
-    "PresenceSaver": PresenceSaver
+    "PresenceSaver": PresenceSaver,
+    "PresencePreview": PresencePreview
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "FluxAdaptiveInjector": "Flux Injector",
-    "PresenceSaver": "Presence Saver"
+    "PresenceSaver": "Presence Saver",
+    "PresencePreview": "👁 Presence Preview"
 }
+
