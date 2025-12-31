@@ -367,22 +367,22 @@ Analyze and respond with your JSON plan.
         
         print(f"   Padding: {side} +{pad_px}px")
         
-        # Create noise-filled canvas
+        # Create solid gray canvas
         if side == "left":
             new_w = img.width + pad_px
-            canvas = self._noise_canvas(new_w, img.height)
+            canvas = self._gray_canvas(new_w, img.height)
             canvas.paste(img, (pad_px, 0))
         elif side == "right":
             new_w = img.width + pad_px
-            canvas = self._noise_canvas(new_w, img.height)
+            canvas = self._gray_canvas(new_w, img.height)
             canvas.paste(img, (0, 0))
         elif side == "top":
             new_h = img.height + pad_px
-            canvas = self._noise_canvas(img.width, new_h)
+            canvas = self._gray_canvas(img.width, new_h)
             canvas.paste(img, (0, pad_px))
         elif side == "bottom":
             new_h = img.height + pad_px
-            canvas = self._noise_canvas(img.width, new_h)
+            canvas = self._gray_canvas(img.width, new_h)
             canvas.paste(img, (0, 0))
         else:
             return img
@@ -404,15 +404,13 @@ Analyze and respond with your JSON plan.
         print(f"   After pad+16:9+2MP: {img.width}x{img.height}")
         return img
 
-    def _noise_canvas(self, w, h):
-        """Create gray canvas with Gaussian noise"""
-        canvas = np.full((h, w, 3), 128, dtype=np.float32)
-        noise = np.random.randn(h, w, 3) * 25
-        canvas = np.clip(canvas + noise, 0, 255).astype(np.uint8)
+    def _gray_canvas(self, w, h):
+        """Create solid gray canvas (RGB 128, 128, 128)"""
+        canvas = np.full((h, w, 3), 128, dtype=np.uint8)
         return Image.fromarray(canvas)
 
     def _adjust_16_9(self, img):
-        """Adjust image to 16:9 by adding noise padding"""
+        """Adjust image to 16:9 by adding gray padding"""
         target = 16 / 9
         current = img.width / img.height
         
@@ -424,7 +422,7 @@ Analyze and respond with your JSON plan.
             new_w = int(img.height * target)
             pad = new_w - img.width
             pad_l = pad // 2
-            canvas = self._noise_canvas(new_w, img.height)
+            canvas = self._gray_canvas(new_w, img.height)
             canvas.paste(img, (pad_l, 0))
             return canvas
         else:
@@ -432,7 +430,7 @@ Analyze and respond with your JSON plan.
             new_h = int(img.width / target)
             pad = new_h - img.height
             pad_t = pad // 2
-            canvas = self._noise_canvas(img.width, new_h)
+            canvas = self._gray_canvas(img.width, new_h)
             canvas.paste(img, (0, pad_t))
             return canvas
 
