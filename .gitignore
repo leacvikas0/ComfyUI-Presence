@@ -1,38 +1,10 @@
-# Sensitive Files - DO NOT COMMIT
-*.json
-presence-*.json
-*service-account*.json
-*credentials*.json
-
-# Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
+*.pyc
+*.pyo
 *.egg-info/
-
-# Virtual Environment
-venv/
-env/
-ENV/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# ComfyUI State
-presence_state.json
-DONE.json
-
-# Test files
-test_*.py
-
-# Logs
-*.log
+dist/
+build/
+.eggs/
+*.egg
+.env
+.venv
