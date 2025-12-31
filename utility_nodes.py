@@ -56,6 +56,11 @@ class FluxAdaptiveInjector:
                 pixels = image_tensor.to(vae_device).contiguous()
                 latent = vae.encode(pixels)
                 
+                # Free GPU memory immediately after encoding
+                del pixels
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
                 if hasattr(latent, "sample"):
                     latent = latent.sample()
                 elif isinstance(latent, dict) and "samples" in latent:

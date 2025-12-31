@@ -394,12 +394,22 @@ Analyze and respond with your JSON plan.
         img = self._adjust_16_9(img)
         
         # Resize to 2MP (padding always outputs high quality)
+        # Also ensure dimensions are divisible by 16 for Flux compatibility
         pixels = img.width * img.height
         target = 2 * 1024 * 1024
         if abs(pixels - target) > 10000:
             scale = (target / pixels) ** 0.5
-            new_w = int(img.width * scale) - (int(img.width * scale) % 2)
-            new_h = int(img.height * scale) - (int(img.height * scale) % 2)
+            new_w = int(img.width * scale)
+            new_h = int(img.height * scale)
+        else:
+            new_w = img.width
+            new_h = img.height
+        
+        # Ensure divisible by 16 for Flux
+        new_w = new_w - (new_w % 16)
+        new_h = new_h - (new_h % 16)
+        
+        if new_w != img.width or new_h != img.height:
             img = img.resize((new_w, new_h), Image.LANCZOS)
         
         print(f"   After pad+16:9+2MP: {img.width}x{img.height}")
