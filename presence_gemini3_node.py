@@ -52,6 +52,7 @@ class PresenceDirector:
                 "system_prompt": ("STRING", {"multiline": True, "default": "You are a Presence Director..."}),
                 "user_input": ("STRING", {"multiline": True, "default": "", "placeholder": "Optional message to AI..."}),
                 "reset": ("BOOLEAN", {"default": False, "label_on": "RESET ALL", "label_off": "Continue"}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
             }
         }
 
@@ -60,7 +61,7 @@ class PresenceDirector:
     FUNCTION = "run"
     CATEGORY = "PresenceAI"
 
-    def run(self, active_folder, api_key, system_prompt, user_input, reset):
+    def run(self, active_folder, api_key, system_prompt, user_input, reset, seed):
         """Main execution loop"""
         
         if not GENAI_AVAILABLE:
