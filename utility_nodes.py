@@ -73,9 +73,13 @@ class FluxAdaptiveInjector:
                 elif isinstance(latent, dict) and "samples" in latent:
                     latent = latent["samples"]
                 
-                # Keep latent on VAE device (like old working code)
-                reference_latents.append(latent)
-                print(f"   Encoded image {i+1}: {H}x{W} -> latent {latent.shape}")
+                # CRITICAL: Detach to prevent holding computation graphs
+                # Keep on VAE device, ensure contiguous
+                latent = latent.contiguous().detach()
+                
+                # CORRECT FORMAT: Wrap in dict (Flux 2 expects {"samples": tensor})
+                reference_latents.append({"samples": latent})
+                print(f"   Encoded image {i+1}: {H}x{W} -> latent {latent.shape} (detached)")
                 
             except Exception as e:
                 print(f"   Error encoding image {i+1}: {e}")
@@ -85,6 +89,7 @@ class FluxAdaptiveInjector:
             for t in conditioning:
                 d = t[1].copy()
                 
+                # Flux 2 expects: conditioning["reference_latents"] = [{"samples": lat1}, {"samples": lat2}]
                 if "reference_latents" in d:
                     d["reference_latents"] = d["reference_latents"] + reference_latents
                 else:
@@ -92,13 +97,7 @@ class FluxAdaptiveInjector:
                 
                 c_out.append([t[0], d])
             
-            # Force memory cleanup
-            import gc
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            
-            print(f"[INJECTOR] Done. {len(reference_latents)} references injected.")
+            print(f"[INJECTOR] Done. {len(reference_latents)} references injected (dict format).")
             return (c_out,)
         else:
             print("[INJECTOR] No references to inject.")
