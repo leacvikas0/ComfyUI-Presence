@@ -59,19 +59,24 @@ class FluxAdaptiveInjector:
                 
                 # Free GPU memory immediately after encoding
                 del pixels
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
                 
                 if hasattr(latent, "sample"):
                     latent = latent.sample()
                 elif isinstance(latent, dict) and "samples" in latent:
                     latent = latent["samples"]
                 
+                # CRITICAL: Move latent to CPU to free GPU for Flux model
+                latent = latent.cpu()
+                
                 reference_latents.append(latent)
-                print(f"   Encoded image {i+1}: {H}x{W} -> latent {latent.shape}")
+                print(f"   Encoded image {i+1}: {H}x{W} -> latent {latent.shape} (on CPU)")
                 
             except Exception as e:
                 print(f"   Error encoding image {i+1}: {e}")
+        
+        # Free any remaining GPU memory
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         if len(reference_latents) > 0:
             c_out = []
