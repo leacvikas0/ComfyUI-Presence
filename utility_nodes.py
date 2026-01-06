@@ -156,12 +156,13 @@ class PresencePreview:
     """
     Preview node to see what images are being sent from the Director.
     Shows the image in ComfyUI's preview panel.
+    Accepts UNALIVER_BUNDLE (list of tensors).
     """
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "images": ("IMAGE",),
+                "image_bundle": ("UNALIVER_BUNDLE",),
             },
             "optional": {
                 "prompt": ("STRING", {"forceInput": True, "default": ""}),
@@ -169,27 +170,26 @@ class PresencePreview:
             }
         }
 
-    RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("images",)
+    RETURN_TYPES = ("UNALIVER_BUNDLE",)
+    RETURN_NAMES = ("image_bundle",)
     FUNCTION = "preview"
     OUTPUT_NODE = True
     CATEGORY = "PresenceAI"
 
-    def preview(self, images, prompt="", filename=""):
+    def preview(self, image_bundle, prompt="", filename=""):
         import folder_paths
         
-        print(f"\n[PREVIEW] Showing {len(images)} images")
+        print(f"\n[PREVIEW] Showing {len(image_bundle)} images")
         print(f"   Prompt: {prompt[:80]}..." if len(prompt) > 80 else f"   Prompt: {prompt}")
         print(f"   Filename: {filename}")
         
         results = []
-        for i, tensor in enumerate(images):
-            # Get dimensions
-            if len(tensor.shape) == 3:
-                H, W, C = tensor.shape
-            else:
-                H, W, C = tensor.shape[1], tensor.shape[2], tensor.shape[3]
+        for i, tensor in enumerate(image_bundle):
+            # Handle both [1, H, W, C] and [H, W, C] shapes
+            if len(tensor.shape) == 4:
+                tensor = tensor[0]  # Remove batch dimension for saving
             
+            H, W, C = tensor.shape
             print(f"   Image {i+1}: {W}x{H}")
             
             # Save to temp for preview
@@ -207,7 +207,7 @@ class PresencePreview:
                 "type": "temp"
             })
         
-        return {"ui": {"images": results}, "result": (images,)}
+        return {"ui": {"images": results}, "result": (image_bundle,)}
 
 
 # Register nodes
