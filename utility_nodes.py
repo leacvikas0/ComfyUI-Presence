@@ -14,6 +14,7 @@ from PIL import Image, ImageOps
 class FluxAdaptiveInjector:
     """
     Encodes reference images into latents and injects into Flux conditioning.
+    Accepts UNALIVER_BUNDLE (list of tensors) from Director.
     """
     @classmethod
     def INPUT_TYPES(cls):
@@ -21,7 +22,7 @@ class FluxAdaptiveInjector:
             "required": {
                 "conditioning": ("CONDITIONING",), 
                 "vae": ("VAE",),
-                "images": ("IMAGE",),
+                "image_bundle": ("UNALIVER_BUNDLE",),
             }
         }
 
@@ -30,8 +31,8 @@ class FluxAdaptiveInjector:
     FUNCTION = "inject_references"
     CATEGORY = "PresenceAI"
 
-    def inject_references(self, conditioning, vae, images):
-        print(f"\n[INJECTOR] Encoding {len(images)} reference images...")
+    def inject_references(self, conditioning, vae, image_bundle):
+        print(f"\n[INJECTOR] Encoding {len(image_bundle)} reference images...")
         
         reference_latents = []
         
@@ -41,7 +42,7 @@ class FluxAdaptiveInjector:
         except:
             vae_device = torch.device("cpu")
         
-        for i, image_tensor in enumerate(images):
+        for i, image_tensor in enumerate(image_bundle):
             # Handle both single image and batch
             if len(image_tensor.shape) == 3:
                 image_tensor = image_tensor.unsqueeze(0)

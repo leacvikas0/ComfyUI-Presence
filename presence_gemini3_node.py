@@ -56,8 +56,8 @@ class PresenceDirector:
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "STRING", "INT", "INT", "STRING")
-    RETURN_NAMES = ("images", "prompt", "width", "height", "filename")
+    RETURN_TYPES = ("UNALIVER_BUNDLE", "STRING", "INT", "INT", "STRING")
+    RETURN_NAMES = ("image_bundle", "prompt", "width", "height", "filename")
     FUNCTION = "run"
     CATEGORY = "PresenceAI"
 
@@ -309,14 +309,14 @@ Analyze and respond with your JSON plan.
                 if pad:
                     img = self._apply_pad(img, pad)
                 
-                # FAILSAFE: Cap at 2MP max, never upscale
+                # Cap at 2MP if too large
                 pixels = img.width * img.height
-                max_pixels = 2 * 1024 * 1024  # 2MP
+                max_pixels = 2 * 1024 * 1024
                 if pixels > max_pixels:
                     scale = (max_pixels / pixels) ** 0.5
                     new_w = int(img.width * scale)
                     new_h = int(img.height * scale)
-                    # Ensure dimensions divisible by 16 for Flux
+                    # Ensure divisible by 16 for Flux
                     new_w = new_w - (new_w % 16)
                     new_h = new_h - (new_h % 16)
                     img = img.resize((new_w, new_h), Image.LANCZOS)
@@ -336,14 +336,13 @@ Analyze and respond with your JSON plan.
             print(f"   [ERROR] No images loaded")
             return self._empty_output()
         
-        # Stack images
-        if len(images) == 1:
-            output_images = images[0]
-        else:
-            output_images = torch.cat(images, dim=0)
+        # Return list of tensors (UNALIVER_BUNDLE)
+        # Each image can be different size - injector will encode each separately
+        print(f"   Output: {len(images)} images")
+        for i, img in enumerate(images):
+            print(f"      Image {i+1}: {img.shape}")
         
-        print(f"   Output: {output_images.shape}")
-        return (output_images, prompt, w, h, output_name)
+        return (images, prompt, w, h, output_name)
 
     def _apply_pad(self, img, pad_spec):
         """Apply padding: 'left 20%' or 'right 30%' etc."""

@@ -193,8 +193,33 @@ When all scenes complete:
 
 ---
 
-## ⚠️ TESTING MODE
+## ⚠️ TESTING MODE - ONE JOB AT A TIME
 
-Currently testing template scenes and group integration.
-Focus on quality of face matching and natural integration.
-Report any issues you notice after checking outputs.
+**IMPORTANT:** We are testing. Do NOT output all jobs at once.
+
+### The Flow:
+1. Output ONE job in the queue
+2. Wait for the image to be generated
+3. The generated image will be sent back to you
+4. You ANALYZE the result: face match? anatomy? quality?
+5. If good → output next job
+6. If bad → retry with adjusted prompt
+
+### Example:
+```json
+{
+  "queue": [
+    {
+      "output_name": "scene_01_throne",
+      "prompt": "...",
+      "load": ["ref_subject_master.png", "template_throne.jpg"],
+      "w": 1920,
+      "h": 1080
+    }
+  ]
+}
+```
+
+Then WAIT. You'll receive the generated image. Check it. Then output the next job.
+
+**This is a CONVERSATION, not a batch process.**
