@@ -81,7 +81,7 @@ class FluxAdaptiveInjector:
             for t in conditioning:
                 d = t[1].copy()
                 
-                # Flux 2 expects: conditioning["reference_latents"] = [{"samples": lat1}, {"samples": lat2}]
+                # Flux expects raw tensors in reference_latents list
                 if "reference_latents" in d:
                     d["reference_latents"] = d["reference_latents"] + reference_latents
                 else:
@@ -89,7 +89,13 @@ class FluxAdaptiveInjector:
                 
                 c_out.append([t[0], d])
             
-            print(f"[INJECTOR] Done. {len(reference_latents)} references injected (dict format).")
+            # Clear VRAM after injection to prevent accumulation
+            import gc
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            print(f"[INJECTOR] Done. {len(reference_latents)} refs injected, VRAM cleared.")
             return (c_out,)
         else:
             print("[INJECTOR] No references to inject.")
@@ -153,6 +159,12 @@ class PresenceSaver:
                 "subfolder": "",
                 "type": "temp"
             })
+        
+        # Clean up VRAM after saving to prevent accumulation
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
             
         return {"ui": {"images": results}}
 
