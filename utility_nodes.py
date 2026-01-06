@@ -85,6 +85,12 @@ class FluxAdaptiveInjector:
                 
                 c_out.append([t[0], d])
             
+            # Force memory cleanup
+            import gc
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
             print(f"[INJECTOR] Done. {len(reference_latents)} references injected.")
             return (c_out,)
         else:

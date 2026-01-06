@@ -90,6 +90,14 @@ class PresenceDirector:
             }
             if os.path.exists(state_file):
                 os.remove(state_file)
+            
+            # Force memory cleanup
+            import gc
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                print(f"   [RESET] GPU cache cleared.")
+            
             print(f"   [RESET] Done. All files will be treated as new.")
         
         # Initialize state
@@ -339,8 +347,14 @@ Analyze and respond with your JSON plan.
         # Return list of tensors (UNALIVER_BUNDLE)
         # Each image can be different size - injector will encode each separately
         print(f"   Output: {len(images)} images")
-        for i, img in enumerate(images):
-            print(f"      Image {i+1}: {img.shape}")
+        for i, img_tensor in enumerate(images):
+            print(f"      Image {i+1}: {img_tensor.shape}")
+        
+        # Force garbage collection to free memory
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         
         return (images, prompt, w, h, output_name)
 
