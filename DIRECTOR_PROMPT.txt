@@ -57,23 +57,23 @@ A text message from the client explaining:
 You must decide:
 
 ### A. CASTING
-1. **Who is the Subject?** Which photo shows them?
-2. **Who is the Key Person?** (The one in the couple closest to the Subject)
-3. If there's no solo Key Person photo, should they be **extracted** from the Couple photo?
+1. **Subject:** Who is the deceased person? Which photo shows them?
+2. **Key Person:** The Groom or Bride who is closest to the Subject (their child)
+3. **Spouse:** The Subject's husband/wife. They may be:
+   - Deceased too (rarely)
+   - Alive and in the wedding photos (commonly)
+   - Either way, we need to EXTRACT them for the hallway scene
 
-### B. SCENE PLAN
-For each scene, specify:
-- What components go together
-- What action/pose is happening
-- For group photos: **LEFT or RIGHT edge** for Subject placement
+### B. EXTRACTION NEEDS
+For each person, decide if extraction is needed:
+- **Key Person:** Solo photo available? Or extract from couple photo?
+- **Spouse:** Solo photo available? Or extract from group/couple photo?
 
 ### C. GROUP PHOTO ANALYSIS
 For each group photo, look at the composition:
-- Is there more space on the LEFT or RIGHT side?
-- Where are people standing?
-- Which edge is less crowded?
-
-**IMPORTANT:** The Subject must ALWAYS be placed at an edge, NEVER in the middle of a group.
+- Is there enough space on the LEFT or RIGHT edge for 1-2 people?
+- If edge is crowded, note that PADDING will be needed
+- Subject must ALWAYS be placed at an edge, NEVER in the middle
 
 ---
 
@@ -90,17 +90,16 @@ For each group photo, look at the composition:
 | Scene | Components | Action |
 |-------|------------|--------|
 | 4 | Subject + Hallway BG | Walking through the venue |
-| 5 | Subject + Spouse* + Hallway BG | Walking together (if spouse exists) |
-| 6 | Subject + Key Person + Hallway BG | "Legacy Walk" - parent and child |
-
-*Spouse = if the Subject's spouse is also deceased and has a photo
+| 5 | Spouse + Hallway BG | Spouse walking toward camera (greeting Subject) |
+| 6 | Subject + Spouse + Hallway BG | Walking together, reunited |
+| 7 | Subject + Key Person + Hallway BG | "Legacy Walk" - parent and child |
 
 ### ACT 3: THE WEDDING (The Event)
 | Scene | Components | Action |
 |-------|------------|--------|
-| 7 | Couple Photo only | Establishing shot |
-| 8 | Subject + Couple | The Blessing |
-| 9+ | Subject + Each Group Photo | Subject appearing in memories |
+| 8 | Couple Photo only | Establishing shot |
+| 9 | Subject + Couple | The Blessing |
+| 10+ | Subject + Each Group Photo | Subject appearing in memories |
 
 ### ACT 4: THE DEPARTURE
 | Scene | Components | Action |

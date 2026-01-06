@@ -281,7 +281,6 @@ Analyze and respond with your JSON plan.
         output_name = job.get("output_name", "output")
         prompt = job.get("prompt", "")
         load_list = job.get("load", [])
-        quality = job.get("quality", "normal")  # "high" = 2MP, "normal" = 1MP
         w = job.get("w", 1920)
         h = job.get("h", 1080)
         pad = job.get("pad", None)  # e.g. "left 20%"
