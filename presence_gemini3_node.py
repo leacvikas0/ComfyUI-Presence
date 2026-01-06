@@ -289,10 +289,10 @@ Analyze and respond with your JSON plan.
         print(f"\n[EXECUTING] {output_name}")
         print(f"   Prompt: {prompt[:80]}...")
         print(f"   Load: {load_list}")
-        print(f"   Quality: {quality}, Size: {w}x{h}")
+        print(f"   Size: {w}x{h}")
         if pad:
             print(f"   Pad: {pad}")
-        # Always cap at 2MP, but don't upscale smaller images
+        
         images = []
         
         for filename in load_list:
@@ -304,26 +304,26 @@ Analyze and respond with your JSON plan.
             try:
                 img = Image.open(path).convert("RGB")
                 img = ImageOps.exif_transpose(img)
-                print(f"   Loaded: {filename} ({img.width}x{img.height})")
+                original_size = f"{img.width}x{img.height}"
                 
                 # Apply padding if specified
                 if pad:
                     img = self._apply_pad(img, pad)
                 
-                # Only downscale if above 2MP, never upscale
+                # FAILSAFE: Cap at 2MP max, never upscale
                 pixels = img.width * img.height
-                max_pixels = 2 * 1024 * 1024  # 2MP max
+                max_pixels = 2 * 1024 * 1024  # 2MP
                 if pixels > max_pixels:
                     scale = (max_pixels / pixels) ** 0.5
                     new_w = int(img.width * scale)
                     new_h = int(img.height * scale)
-                    # Ensure even dimensions
-                    new_w = new_w - (new_w % 2)
-                    new_h = new_h - (new_h % 2)
+                    # Ensure dimensions divisible by 16 for Flux
+                    new_w = new_w - (new_w % 16)
+                    new_h = new_h - (new_h % 16)
                     img = img.resize((new_w, new_h), Image.LANCZOS)
-                    print(f"   Downscaled to 2MP: {new_w}x{new_h}")
+                    print(f"   Loaded: {filename} ({original_size} → {new_w}x{new_h}, capped at 2MP)")
                 else:
-                    print(f"   Keeping original size ({pixels/1024/1024:.1f}MP)")
+                    print(f"   Loaded: {filename} ({original_size})")
                 
                 # Convert to tensor (NHWC)
                 arr = np.array(img).astype(np.float32) / 255.0
