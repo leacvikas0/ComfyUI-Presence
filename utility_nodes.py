@@ -77,8 +77,8 @@ class FluxAdaptiveInjector:
                 # Keep on VAE device, ensure contiguous
                 latent = latent.contiguous().detach()
                 
-                # CORRECT FORMAT: Wrap in dict (Flux 2 expects {"samples": tensor})
-                reference_latents.append({"samples": latent})
+                # Store RAW tensor (ComfyUI expects .size() method)
+                reference_latents.append(latent)
                 print(f"   Encoded image {i+1}: {H}x{W} -> latent {latent.shape} (detached)")
                 
             except Exception as e:
