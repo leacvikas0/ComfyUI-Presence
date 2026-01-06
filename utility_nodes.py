@@ -65,7 +65,7 @@ class FluxAdaptiveInjector:
                 pixels = image_tensor.to(vae_device).contiguous()
                 latent = vae.encode(pixels)
                 
-                # Free GPU memory immediately after encoding
+                # Free pixel memory after encoding
                 del pixels
                 
                 if hasattr(latent, "sample"):
@@ -73,18 +73,12 @@ class FluxAdaptiveInjector:
                 elif isinstance(latent, dict) and "samples" in latent:
                     latent = latent["samples"]
                 
-                # CRITICAL: Move latent to CPU to free GPU for Flux model
-                latent = latent.cpu()
-                
+                # Keep latent on VAE device (like old working code)
                 reference_latents.append(latent)
-                print(f"   Encoded image {i+1}: {H}x{W} -> latent {latent.shape} (on CPU)")
+                print(f"   Encoded image {i+1}: {H}x{W} -> latent {latent.shape}")
                 
             except Exception as e:
                 print(f"   Error encoding image {i+1}: {e}")
-        
-        # Free any remaining GPU memory
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
         if len(reference_latents) > 0:
             c_out = []
