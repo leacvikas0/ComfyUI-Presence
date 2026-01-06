@@ -25,6 +25,10 @@ except ImportError:
 # Global state
 DIRECTOR_STATE = {}
 
+# Centralized logs directory (in custom nodes folder)
+LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
 
 class PresenceDirector:
     """
@@ -77,7 +81,11 @@ class PresenceDirector:
         print(f"   Folder: {active_folder}")
         
         global DIRECTOR_STATE
-        state_file = os.path.join(active_folder, "director_state.json")
+        
+        # Create unique state file path from folder hash
+        import hashlib
+        folder_hash = hashlib.md5(active_folder.encode()).hexdigest()[:12]
+        state_file = os.path.join(LOG_DIR, f"session_{folder_hash}.json")
         
         # Handle reset
         if reset:
@@ -88,8 +96,13 @@ class PresenceDirector:
                 "queue": [],
                 "last_input": ""
             }
+            
+            # Archive old state file instead of deleting
             if os.path.exists(state_file):
-                os.remove(state_file)
+                archive_name = f"session_{folder_hash}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                archive_path = os.path.join(LOG_DIR, archive_name)
+                os.rename(state_file, archive_path)
+                print(f"   [RESET] Archived: {archive_name}")
             
             # Force memory cleanup
             import gc
@@ -108,13 +121,14 @@ class PresenceDirector:
                 "queue": [],
                 "last_input": ""
             }
-            # Load from disk
+            # Load from centralized logs
             if os.path.exists(state_file):
                 try:
                     with open(state_file, "r") as f:
                         disk = json.load(f)
                         DIRECTOR_STATE[active_folder]["seen_files"] = set(disk.get("seen_files", []))
                         DIRECTOR_STATE[active_folder]["queue"] = disk.get("queue", [])
+                        print(f"   [LOADED] Session from logs")
                 except:
                     pass
         
@@ -490,12 +504,18 @@ Analyze and respond with your JSON plan.
         return {}
 
     def _save_state(self, folder, state):
-        """Save state to disk"""
-        path = os.path.join(folder, "director_state.json")
+        """Save state to centralized logs directory"""
+        # Create unique filename from folder path hash
+        import hashlib
+        folder_hash = hashlib.md5(folder.encode()).hexdigest()[:12]
+        path = os.path.join(LOG_DIR, f"session_{folder_hash}.json")
+        
         with open(path, "w") as f:
             json.dump({
+                "folder": folder,
                 "seen_files": list(state["seen_files"]),
-                "queue": state["queue"]
+                "queue": state["queue"],
+                "updated": datetime.now().isoformat()
             }, f, indent=2)
 
     def _empty_output(self):
