@@ -23,9 +23,6 @@ class FluxAdaptiveInjector:
                 "conditioning": ("CONDITIONING",), 
                 "vae": ("VAE",),
                 "image_bundle": ("UNALIVER_BUNDLE",),
-            },
-            "optional": {
-                "bypass": ("BOOLEAN", {"default": False, "label_on": "BYPASS (no injection)", "label_off": "Inject normally"}),
             }
         }
 
@@ -34,12 +31,7 @@ class FluxAdaptiveInjector:
     FUNCTION = "inject_references"
     CATEGORY = "PresenceAI"
 
-    def inject_references(self, conditioning, vae, image_bundle, bypass=False):
-        # BYPASS MODE: Skip all encoding, just pass through
-        if bypass:
-            print(f"\n[INJECTOR] BYPASS MODE - Skipping injection, passing conditioning through")
-            return (conditioning,)
-        
+    def inject_references(self, conditioning, vae, image_bundle):
         print(f"\n[INJECTOR] Encoding {len(image_bundle)} reference images...")
         
         reference_latents = []
